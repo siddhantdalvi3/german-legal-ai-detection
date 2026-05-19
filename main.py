@@ -63,9 +63,9 @@ def mine():
 
 
 @stage
-def generate_ai():
+def generate_ai(models: list[str] | None = None):
     from scripts.generate_ai import generate_ai_corpus
-    generate_ai_corpus()
+    generate_ai_corpus(models)
 
 
 @stage
@@ -157,6 +157,10 @@ def main():
     parser.add_argument("--setup", action="store_true", help="Check environment")
     parser.add_argument("--mine", action="store_true", help="Mine human text sources")
     parser.add_argument("--generate", action="store_true", help="Generate AI text corpus")
+    parser.add_argument("--models", nargs="*", default=None,
+                        help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
+    parser.add_argument("--list-models", action="store_true",
+                        help="List available generation models")
     parser.add_argument("--preprocess", action="store_true", help="Build dataset")
     parser.add_argument("--train", action="store_true", help="Train all models")
     parser.add_argument("--evaluate", action="store_true", help="Evaluate all models")
@@ -171,12 +175,19 @@ def main():
 
     args = parser.parse_args()
 
+    if args.list_models:
+        from config import AVAILABLE_MODELS
+        logger.info("Available generation models:")
+        for key, info in AVAILABLE_MODELS.items():
+            logger.info(f"  {key:12s}  {info['type']:6s}  {info['desc']}")
+        return
+
     if args.setup:
         setup_environment()
     if args.mine:
         mine()
     if args.generate:
-        generate_ai()
+        generate_ai(args.models)
     if args.preprocess:
         preprocess()
     if args.train:
@@ -190,7 +201,7 @@ def main():
         logger.info("Starting full pipeline...")
         setup_environment()
         mine()
-        generate_ai()
+        generate_ai(args.models)
         preprocess()
         train()
         evaluate()
@@ -200,7 +211,7 @@ def main():
         predict(args)
 
     if not any([args.setup, args.mine, args.generate, args.preprocess,
-                args.train, args.evaluate, args.serve, args.all,
+                args.train, args.evaluate, args.serve, args.all, args.list_models,
                 args.predict is not None, has_input]):
         parser.print_help()
 

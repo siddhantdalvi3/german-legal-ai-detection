@@ -17,13 +17,16 @@ GESETZE_TOC_URL = "https://www.gesetze-im-internet.de/gii-toc.xml"
 OPENLEGALDATA_DUMP_URL = "https://static.openlegaldata.io/dumps/latest/"
 BUNDESTAG_OPENDATA_URL = "https://www.bundestag.de/services/opendata"
 
-OLLAMA_MODELS = [
-    "qwen2.5:7b",
-    "gemma3:12b",
-    "gemma4",
-    "mistral",
-]
-MLX_MODEL = "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+AVAILABLE_MODELS = {
+    "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
+    "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
+    "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4"},
+    "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
+    "mlx": {"type": "mlx", "name": "mlx-community/Mistral-7B-Instruct-v0.3-4bit", "desc": "MLX Mistral 7B Instruct 4bit"},
+}
+
+OLLAMA_MODELS = [m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "ollama"]
+MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
 
 TEMPERATURES = [0.3, 0.7, 1.0]
 SENTENCES_PER_COMBINATION = 200

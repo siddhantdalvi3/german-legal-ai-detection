@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from config import (
     AI_GENERATED_DIR,
+    AVAILABLE_MODELS,
     OLLAMA_MODELS,
     MLX_MODEL,
     TEMPERATURES,
@@ -129,21 +130,33 @@ def load_checkpoint(path: Path) -> int:
     return count
 
 
-def generate_ai_corpus():
+def generate_ai_corpus(models: list[str] | None = None):
     AI_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+    if models is None:
+        models = OLLAMA_MODELS + [f"mlx:{MLX_MODEL}"]
+    else:
+        ollama_selected = [m for m in OLLAMA_MODELS if any(k in m for k in models)]
+        mlx_selected = [f"mlx:{MLX_MODEL}"] if "mlx" in models else []
+        if not ollama_selected and not mlx_selected and models:
+            logger.warning(f"No models matched: {models}. Available: {list(AVAILABLE_MODELS)}")
+            return
+        models = ollama_selected + mlx_selected
+
+    logger.info(f"Models to run: {models}")
 
     if not check_ollama_running():
         logger.info("Starting Ollama server...")
         start_ollama()
 
-    for model in OLLAMA_MODELS:
+    for model in [m for m in models if not m.startswith("mlx:")]:
         logger.info(f"Pulling model: {model}")
         subprocess.run(["ollama", "pull", model], capture_output=True, timeout=600)
 
     total_sentences = 0
     target = SENTENCES_PER_COMBINATION
 
-    for model in OLLAMA_MODELS + [f"mlx:{MLX_MODEL}"]:
+    for model in models:
         for temp in TEMPERATURES:
             model_key = model.replace("/", "_").replace(":", "_")
             ckpt_path = get_checkpoint_path(model_key, temp)
