@@ -117,18 +117,16 @@ def get_checkpoint_path(model_key: str, temperature: float) -> Path:
     return AI_GENERATED_DIR / f"{model_key}__temp_{temp_str}.jsonl"
 
 
-def load_checkpoint(path: Path) -> set[str]:
+def load_checkpoint(path: Path) -> int:
     if not path.exists():
-        return set()
-    prompts_done = set()
+        return 0
+    count = 0
     with open(path) as f:
         for line in f:
-            try:
-                data = json.loads(line)
-                prompts_done.add(data.get("topic", ""))
-            except json.JSONDecodeError:
-                continue
-    return prompts_done
+            line = line.strip()
+            if line:
+                count += 1
+    return count
 
 
 def generate_ai_corpus():
@@ -149,8 +147,8 @@ def generate_ai_corpus():
         for temp in TEMPERATURES:
             model_key = model.replace("/", "_").replace(":", "_")
             ckpt_path = get_checkpoint_path(model_key, temp)
-            done_topics = load_checkpoint(ckpt_path)
-            sentences_in_batch = len(done_topics)
+            done_count = load_checkpoint(ckpt_path)
+            sentences_in_batch = done_count
 
             logger.info(
                 f"[{model_key} | temp={temp}] "
@@ -166,15 +164,12 @@ def generate_ai_corpus():
                 initial=sentences_in_batch,
                 desc=f"{model_key} t={temp}",
             )
-            topic_idx = 0
+            topic_idx = sentences_in_batch
 
             with open(ckpt_path, "a") as f:
                 while sentences_in_batch < target:
                     topic = TOPICS[topic_idx % len(TOPICS)]
                     topic_idx += 1
-
-                    if topic in done_topics:
-                        continue
 
                     prompt = PROMPT_TEMPLATE.format(topic=topic)
 
@@ -194,7 +189,6 @@ def generate_ai_corpus():
                         f.flush()
                         sentences_in_batch += 1
                         total_sentences += 1
-                        done_topics.add(topic)
                         pbar.update(1)
                     except Exception as e:
                         logger.error(f"Generation failed: {e}")
