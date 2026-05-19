@@ -14,6 +14,7 @@ handler.setFormatter(colorlog.ColoredFormatter(
 logger = colorlog.getLogger(__name__)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+logger.propagate = False
 
 _LOGGING_CONFIGURED = False
 
