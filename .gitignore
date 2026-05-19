@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+mlruns/
+mlflow.db
+checkpoints/
+logs/
+models/
+data/gesetze_im_internet/
+data/openlegaldata/
+data/bundestag/
+data/ai_generated/
+data/processed/
+data/index.json
+*.zip
