@@ -99,18 +99,28 @@ def ollama_generate(model: str, prompt: str, temperature: float) -> str:
     return resp.json()["response"].strip()
 
 
+_mlx_model = None
+_mlx_tokenizer = None
+
+
 def mlx_generate(prompt: str, temperature: float) -> str:
-    result = subprocess.run(
-        [
-            "mlx_lm.generate",
-            "--model", MLX_MODEL,
-            "--prompt", prompt,
-            "--temp", str(temperature),
-            "--max-tokens", "500",
-        ],
-        capture_output=True, text=True, timeout=120,
+    global _mlx_model, _mlx_tokenizer
+
+    if _mlx_model is None:
+        logger.info(f"Loading MLX model: {MLX_MODEL}")
+        from mlx_lm import load
+        _mlx_model, _mlx_tokenizer = load(MLX_MODEL)
+        logger.info("MLX model loaded")
+
+    from mlx_lm import generate
+    response = generate(
+        _mlx_model, _mlx_tokenizer,
+        prompt=prompt,
+        temp=temperature,
+        max_tokens=500,
+        verbose=False,
     )
-    return result.stdout.strip()
+    return response.strip()
 
 
 def get_checkpoint_path(model_key: str, temperature: float) -> Path:
