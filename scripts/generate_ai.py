@@ -113,10 +113,11 @@ def mlx_generate(prompt: str, temperature: float) -> str:
         logger.info("MLX model loaded")
 
     from mlx_lm import generate
+    from mlx_lm.sample_utils import make_sampler
     response = generate(
         _mlx_model, _mlx_tokenizer,
         prompt=prompt,
-        temp=temperature,
+        sampler=make_sampler(temp=temperature),
         max_tokens=500,
         verbose=False,
     )
