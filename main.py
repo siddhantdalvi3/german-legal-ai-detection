@@ -59,7 +59,20 @@ def mine():
     from scripts.mining import Miner
     miner = Miner()
     miner.mine_gesetze_im_internet()
-    logger.info("Mining complete. Run --preprocess after AI generation.")
+
+    from scripts.mining_openlegaldata import mine_openlegaldata
+    try:
+        mine_openlegaldata()
+    except Exception as e:
+        logger.warning(f"OpenLegalData mining failed (optional): {e}")
+
+    from scripts.mining_bundestag import mine_bundestag
+    try:
+        mine_bundestag()
+    except Exception as e:
+        logger.warning(f"Bundestag mining failed (optional): {e}")
+
+    logger.info("All mining complete!")
 
 
 @stage
