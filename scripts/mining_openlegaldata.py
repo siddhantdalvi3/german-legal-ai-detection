@@ -1,59 +1,71 @@
-import logging
-import sqlite3
+import re
 from pathlib import Path
-
-import requests
-from tqdm import tqdm
 
 from config import OPENLEGALDATA_DIR
 from utils.mining import logger
 
-OPENLEGALDATA_DUMP_URL = "https://static.openlegaldata.io/dumps/latest/data.db.gz"
-
-DUMP_PATH = OPENLEGALDATA_DIR / "data.db"
+HF_DATASET = "openlegaldata/court-decisions-germany"
+HF_CONFIG = "dump-20260520-10k"  # ~10k rows, ~50 MB
 
 
 def download_dump():
-    if DUMP_PATH.exists():
-        logger.info(f"OpenLegalData dump already exists: {DUMP_PATH}")
+    if HF_DATASET_CACHE.exists():
+        logger.info(f"OpenLegalData cache found, skipping download")
         return
 
-    OPENLEGALDATA_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Downloading OpenLegalData dump from {OPENLEGALDATA_DUMP_URL} ...")
+    logger.info(
+        f"Loading OpenLegalData from Hugging Face: {HF_DATASET} (config: {HF_CONFIG})"
+    )
+    logger.info(
+        "Note: Requires HF login + accepting dataset conditions at "
+        "https://huggingface.co/datasets/openlegaldata/court-decisions-germany"
+    )
 
-    resp = requests.get(OPENLEGALDATA_DUMP_URL, stream=True, timeout=300)
-    resp.raise_for_status()
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        logger.error("Install datasets: uv pip install datasets")
+        return
 
-    import gzip
-    with open(DUMP_PATH, "wb") as f:
-        for chunk in tqdm(resp.iter_content(chunk_size=8192), desc="Downloading OLD"):
-            f.write(chunk)
+    try:
+        dataset = load_dataset(HF_DATASET, HF_CONFIG, split="train", trust_remote_code=True)
+        dataset.save_to_disk(str(OPENLEGALDATA_DIR / "hf_dataset"))
+        logger.info(f"Saved {len(dataset)} rows to disk")
+    except Exception as e:
+        logger.error(f"Failed to load dataset: {e}")
+        logger.info(
+            "Make sure you:\n"
+            "  1. Created a HF account at https://huggingface.co\n"
+            "  2. Run: hf auth login\n"
+            "  3. Accepted conditions at https://huggingface.co/datasets/openlegaldata/court-decisions-germany"
+        )
 
-    logger.info(f"OpenLegalData dump saved: {DUMP_PATH}")
+
+HF_DATASET_CACHE = OPENLEGALDATA_DIR / "hf_dataset"
 
 
 def extract_court_decisions(limit: int | None = None) -> list[str]:
-    if not DUMP_PATH.exists():
+    if not HF_DATASET_CACHE.exists():
         download_dump()
 
+    if not HF_DATASET_CACHE.exists():
+        logger.warning("OpenLegalData not available, skipping")
+        return []
+
+    logger.info("Loading cached OpenLegalData from disk...")
+    from datasets import load_from_disk
+    dataset = load_from_disk(str(HF_DATASET_CACHE))
+
     texts = []
-    conn = sqlite3.connect(str(DUMP_PATH))
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT text FROM cases WHERE language='de' AND text IS NOT NULL "
-        "AND length(text) > 100 ORDER BY date DESC"
-    )
-    rows = cursor.fetchmany(limit) if limit else cursor.fetchall()
-
-    for (text,) in tqdm(rows, desc="Extracting OLD decisions"):
-        import re
-        clean = re.sub(r"<[^>]+>", " ", text)
+    for i, sample in enumerate(dataset):
+        if limit and i >= limit:
+            break
+        content = sample.get("content", "") or ""
+        clean = re.sub(r"<[^>]+>", " ", content)
         clean = re.sub(r"\s+", " ", clean).strip()
         if len(clean) >= 100:
             texts.append(clean)
 
-    conn.close()
     logger.info(f"Extracted {len(texts)} court decisions from OpenLegalData")
     return texts
 
