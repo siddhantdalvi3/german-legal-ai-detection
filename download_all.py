@@ -49,13 +49,13 @@ def _ollama_model_pulled(model: str) -> bool:
 
 
 def _mlx_cached() -> bool:
-    result = subprocess.run(
-        [str(PROJECT_ROOT / ".venv" / "bin" / "python"), "-c",
-         "from huggingface_hub import snapshot_download; "
-         "snapshot_download('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
-        capture_output=True,
-    )
-    return result.returncode == 0
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if not hf_cache.exists():
+        return False
+    for d in hf_cache.iterdir():
+        if "mistral" in d.name.lower() and "4bit" in d.name.lower():
+            return True
+    return False
 
 
 def download_deps():
@@ -112,6 +112,7 @@ def download_models():
             [venv_python, "-c",
              "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
             "MLX Mistral 7B 4bit",
+            timeout=600,
         )
 
 
