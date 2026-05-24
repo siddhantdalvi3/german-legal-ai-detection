@@ -18,13 +18,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
 
-def run(cmd: list[str], desc: str, timeout: int | None = None) -> bool:
+def run(cmd: list[str], desc: str, timeout: int | None = None,
+        silent: bool = False) -> bool:
     print(f"  [{desc}]")
+    std = subprocess.DEVNULL if silent else None
     try:
-        subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
+        subprocess.run(cmd, timeout=timeout, check=True,
+                       stdout=std, stderr=std)
         print(f"  ✓")
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        print(f"  ✗ {e}")
         return False
 
 
@@ -79,6 +83,7 @@ def download_deps():
         run(
             [str(venv / "bin" / "python"), "-m", "spacy", "download", "de_core_news_lg"],
             "spacy de_core_news_lg",
+            timeout=600,
         )
 
 
