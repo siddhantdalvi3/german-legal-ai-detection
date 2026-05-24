@@ -23,6 +23,7 @@ dependencies = [
     "pydantic>=2.10.0",
     "colorlog>=6.9.0",
     "rapidfuzz>=3.11.0",
+    "mlx-lm>=0.31.0",
 ]
 
 [build-system]

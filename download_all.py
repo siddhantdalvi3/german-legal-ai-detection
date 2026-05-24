@@ -58,6 +58,7 @@ def download_models():
 
     print("\n=== MLX Model (3.8 GB) ===")
     venv_python = str(PROJECT_ROOT / ".venv" / "bin" / "python")
+    run(["uv", "sync"], "uv sync (ensure mlx-lm installed)")
     run(
         [venv_python, "-c",
          "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
