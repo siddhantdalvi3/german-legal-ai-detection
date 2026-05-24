@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.14
 """
 Download all dependencies, models, and data for the German AI-text detector.
-Run once after a clean checkout or cache wipe.
+Idempotent: skips anything already downloaded.
 
 Usage:
     uv run python download_all.py            # full download (~55 GB)
@@ -19,29 +19,67 @@ PROJECT_ROOT = Path(__file__).parent.absolute()
 
 
 def run(cmd: list[str], desc: str, timeout: int | None = None) -> bool:
-    print(f"\n  [{desc}]")
+    print(f"  [{desc}]")
     try:
-        subprocess.run(cmd, timeout=timeout, check=True)
-        print(f"  ✓ {desc}")
+        subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
+        print(f"  ✓")
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"  ✗ {desc}: {e}")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
+
+
+def _spacy_installed() -> bool:
+    result = subprocess.run(
+        [str(PROJECT_ROOT / ".venv" / "bin" / "python"), "-c",
+         "import spacy; spacy.load('de_core_news_lg')"],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def _ollama_model_pulled(model: str) -> bool:
+    result = subprocess.run(
+        ["ollama", "list"], capture_output=True, text=True
+    )
+    return model in result.stdout
+
+
+def _mlx_cached() -> bool:
+    result = subprocess.run(
+        [str(PROJECT_ROOT / ".venv" / "bin" / "python"), "-c",
+         "from huggingface_hub import snapshot_download; "
+         "snapshot_download('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def download_deps():
     print("\n=== Python Dependencies (~2 GB with torch) ===")
     venv = PROJECT_ROOT / ".venv"
-    if not (venv / "bin" / "python").exists():
+    if (venv / "bin" / "python").exists():
+        print("  .venv exists, skipping")
+    else:
         run(["uv", "venv"], "create .venv")
-    run(["uv", "sync"], "uv sync (pyproject.toml deps)")
+
+    # lazy check: if mlx-lm is importable, deps are installed
+    result = subprocess.run(
+        [str(venv / "bin" / "python"), "-c", "import mlx_lm"],
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        print("  uv sync already done, skipping")
+    else:
+        run(["uv", "sync"], "uv sync (pyproject.toml deps)")
 
     print("\n=== spaCy Model (568 MB) ===")
-    venv_python = str(venv / "bin" / "python")
-    run(
-        [venv_python, "-m", "spacy", "download", "de_core_news_lg"],
-        "spacy de_core_news_lg",
-    )
+    if _spacy_installed():
+        print("  de_core_news_lg already installed, skipping")
+    else:
+        run(
+            [str(venv / "bin" / "python"), "-m", "spacy", "download", "de_core_news_lg"],
+            "spacy de_core_news_lg",
+        )
 
 
 def download_models():
@@ -53,22 +91,29 @@ def download_models():
         ("mistral", "4.1 GB"),
     ]
     for model, size in ollama_models:
-        run(["ollama", "pull", model], f"ollama pull {model} ({size})",
-            timeout=1800)
+        if _ollama_model_pulled(model):
+            print(f"  {model} already pulled, skipping")
+        else:
+            run(["ollama", "pull", model], f"ollama pull {model} ({size})",
+                timeout=1800)
 
     print("\n=== MLX Model (3.8 GB) ===")
     venv_python = str(PROJECT_ROOT / ".venv" / "bin" / "python")
-    run(["uv", "sync"], "uv sync (ensure mlx-lm installed)")
-    run(
-        [venv_python, "-c",
-         "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
-        "MLX Mistral 7B 4bit",
-    )
+    if _mlx_cached():
+        print("  mlx-community/Mistral-7B-Instruct-v0.3-4bit already cached, skipping")
+    else:
+        run(["uv", "sync"], "uv sync (ensure mlx-lm installed)")
+        run(
+            [venv_python, "-c",
+             "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
+            "MLX Mistral 7B 4bit",
+        )
 
 
 def download_data():
     print("\n=== Human Data Mining ===")
     print("  (Gesetze ~50 MB + Bundestag ~320 MB + OpenLegalData ~16.9 GB)")
+    print("  Each source skips if already downloaded.")
     print("  OpenLegalData requires HF login + accepted conditions:")
     print("    hf auth login")
     print("    https://huggingface.co/datasets/openlegaldata/court-decisions-germany")
@@ -79,7 +124,7 @@ def download_data():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download all project assets"
+        description="Download all project assets (idempotent)"
     )
     parser.add_argument("--deps", action="store_true",
                         help="Python deps + spaCy (~2.5 GB)")
