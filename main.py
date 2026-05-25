@@ -33,7 +33,7 @@ def stage(func):
 def setup_environment():
     logger.info("Checking Python version...")
     v = sys.version_info
-    assert v.major == 3 and v.minor >= 14, f"Need Python >= 3.14, got {v.major}.{v.minor}"
+    assert v.major == 3 and v.minor >= 12, f"Need Python >= 3.12, got {v.major}.{v.minor}"
 
     logger.info("Checking spaCy model...")
     try:

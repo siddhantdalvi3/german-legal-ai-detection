@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3
 """
 Download all dependencies, models, and data for the German AI-text detector.
 Idempotent: skips anything already downloaded.
@@ -12,19 +12,18 @@ Usage:
 
 import argparse
 import subprocess
-import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
 
-def run(cmd: list[str], desc: str, timeout: int | None = None,
-        silent: bool = False) -> bool:
+def run(
+    cmd: list[str], desc: str, timeout: int | None = None, silent: bool = False
+) -> bool:
     print(f"  [{desc}]")
     std = subprocess.DEVNULL if silent else None
     try:
-        subprocess.run(cmd, timeout=timeout, check=True,
-                       stdout=std, stderr=std)
+        subprocess.run(cmd, timeout=timeout, check=True, stdout=std, stderr=std)
         print(f"  ✓")
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -34,17 +33,18 @@ def run(cmd: list[str], desc: str, timeout: int | None = None,
 
 def _spacy_installed() -> bool:
     result = subprocess.run(
-        [str(PROJECT_ROOT / ".venv" / "bin" / "python"), "-c",
-         "import spacy; spacy.load('de_core_news_lg')"],
+        [
+            str(PROJECT_ROOT / ".venv" / "bin" / "python"),
+            "-c",
+            "import spacy; spacy.load('de_core_news_lg')",
+        ],
         capture_output=True,
     )
     return result.returncode == 0
 
 
 def _ollama_model_pulled(model: str) -> bool:
-    result = subprocess.run(
-        ["ollama", "list"], capture_output=True, text=True
-    )
+    result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
     return model in result.stdout
 
 
@@ -81,7 +81,13 @@ def download_deps():
         print("  de_core_news_lg already installed, skipping")
     else:
         run(
-            [str(venv / "bin" / "python"), "-m", "spacy", "download", "de_core_news_lg"],
+            [
+                str(venv / "bin" / "python"),
+                "-m",
+                "spacy",
+                "download",
+                "de_core_news_lg",
+            ],
             "spacy de_core_news_lg",
             timeout=600,
         )
@@ -99,8 +105,9 @@ def download_models():
         if _ollama_model_pulled(model):
             print(f"  {model} already pulled, skipping")
         else:
-            run(["ollama", "pull", model], f"ollama pull {model} ({size})",
-                timeout=1800)
+            run(
+                ["ollama", "pull", model], f"ollama pull {model} ({size})", timeout=1800
+            )
 
     print("\n=== MLX Model (3.8 GB) ===")
     venv_python = str(PROJECT_ROOT / ".venv" / "bin" / "python")
@@ -109,8 +116,11 @@ def download_models():
     else:
         run(["uv", "sync"], "uv sync (ensure mlx-lm installed)")
         run(
-            [venv_python, "-c",
-             "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')"],
+            [
+                venv_python,
+                "-c",
+                "from mlx_lm import load; load('mlx-community/Mistral-7B-Instruct-v0.3-4bit')",
+            ],
             "MLX Mistral 7B 4bit",
             timeout=600,
         )
@@ -124,20 +134,22 @@ def download_data():
     print("    hf auth login")
     print("    https://huggingface.co/datasets/openlegaldata/court-decisions-germany")
     venv_python = str(PROJECT_ROOT / ".venv" / "bin" / "python")
-    run([venv_python, "main.py", "--mine"], "mine all sources",
-        timeout=7200)
+    run([venv_python, "main.py", "--mine"], "mine all sources", timeout=7200)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Download all project assets (idempotent)"
     )
-    parser.add_argument("--deps", action="store_true",
-                        help="Python deps + spaCy (~2.5 GB)")
-    parser.add_argument("--models", action="store_true",
-                        help="Ollama + MLX models (~36 GB)")
-    parser.add_argument("--data", action="store_true",
-                        help="Human data via mining (~17 GB)")
+    parser.add_argument(
+        "--deps", action="store_true", help="Python deps + spaCy (~2.5 GB)"
+    )
+    parser.add_argument(
+        "--models", action="store_true", help="Ollama + MLX models (~36 GB)"
+    )
+    parser.add_argument(
+        "--data", action="store_true", help="Human data via mining (~17 GB)"
+    )
     args = parser.parse_args()
 
     any_specific = args.deps or args.models or args.data

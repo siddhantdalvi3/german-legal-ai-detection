@@ -64,6 +64,9 @@ def extract_human_openlegaldata() -> list[dict]:
 
 def extract_human_bundestag() -> list[dict]:
     texts = []
+    if not BUNDESTAG_DIR.exists():
+        logger.info(f"  Bundestag directory not found, skipping")
+        return texts
     for year_dir in sorted(BUNDESTAG_DIR.iterdir()):
         if not year_dir.is_dir() or not year_dir.name.isdigit():
             continue

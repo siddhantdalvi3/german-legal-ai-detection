@@ -86,7 +86,7 @@ python main.py --serve
 
 ## Requirements
 
-- Python >= 3.14 (`/opt/homebrew/bin/python3.14`)
+- Python >= 3.12 (tested on 3.14, `/opt/homebrew/bin/python3.14`)
 - Apple Silicon (M3 Pro recommended for MPS GPU acceleration, 18 GB RAM)
 - Ollama for AI text generation (`ollama pull qwen2.5 gemma3 gemma4 mistral`)
 - HuggingFace account for OpenLegalData dataset (`hf auth login`)
