@@ -5,29 +5,26 @@ Detect AI-generated German legal and administrative texts with a focus on minimi
 ## Quick Start
 
 ```bash
-# Setup
-python3.14 -m venv .venv
-source .venv/bin/activate
-uv sync
-
-# Run full pipeline
-python main.py --all
+# One-shot setup (downloads everything ~55 GB, idempotent):
+uv run python download_all.py
 
 # Or step by step:
-python main.py --mine          # Download human texts
-python main.py --generate      # Generate AI texts (Ollama + MLX)
-python main.py --preprocess    # Build dataset
-python main.py --train         # Train models
-python main.py --evaluate      # Evaluate + MLflow logging
+uv sync                                # Install Python deps
+python main.py --mine                  # Download human texts
+python main.py --generate              # Generate AI texts (all 15 combos)
+python main.py --generate --models mistral qwen2.5   # Selective generation
+python main.py --preprocess            # Build dataset
+python main.py --train                 # Train models (baseline + gbert)
+python main.py --evaluate              # Evaluate + MLflow logging
 
-# Inference
+# Inference:
 python main.py --predict --text "Die Deutsche Bundesbank wird ermächtigt..."
-python predict.py --model lr --threshold 0.9 --text "..."
+python main.py --predict --model lr --threshold 0.9 --text "..."
 
-# Interactive mode
-python predict.py
+# Interactive mode:
+python main.py --predict
 
-# API server
+# API server:
 python main.py --serve
 ```
 
@@ -36,10 +33,11 @@ python main.py --serve
 ```
 ├── main.py                    # Pipeline orchestrator
 ├── config.py                  # Central configuration
+├── download_all.py            # Idempotent download of all assets
 ├── scripts/
 │   ├── mining.py              # Gesetze-im-Internet miner
-│   ├── mining_openlegaldata.py
-│   ├── mining_bundestag.py
+│   ├── mining_openlegaldata.py# OpenLegalData (HF datasets)
+│   ├── mining_bundestag.py    # Bundestag protocols (AJAX endpoint)
 │   ├── generate_ai.py         # Ollama + MLX generation (checkpointed)
 │   ├── preprocessing.py       # Clean, segment, deduplicate
 │   ├── train.py               # Training orchestrator
@@ -51,13 +49,13 @@ python main.py --serve
 │       ├── baseline.py        # Logistic Regression + Random Forest
 │       └── transformer.py     # gbert-base + LoRA
 ├── utils/
-│   ├── mining.py              # Data storage utilities
-│   └── nlp_utils.py           # spaCy, cleaning helpers
+│   ├── mining.py              # Data storage + logging utilities
+│   └── nlp_utils.py           # spaCy, XML cleaning, sentence splitting
 ├── docs/
-│   ├── architecture.md
-│   ├── dataset.md
-│   ├── evaluation.md
-│   └── lit_review/            # 15-20 paper review
+│   ├── architecture.md        # Pipeline + MLflow structure
+│   ├── dataset.md             # Sources, preprocessing, current state
+│   ├── evaluation.md          # Metrics, thresholds, status
+│   └── lit_review/            # 24 papers across 3 topics
 ├── data/                      # Raw and processed data
 ├── models/                    # Symlink to MLflow artifacts
 └── mlruns/                    # MLflow experiment data
@@ -65,22 +63,45 @@ python main.py --serve
 
 ## Data Sources
 
-- **Human**: Gesetze-im-Internet, Open Legal Data, Bundestag protocols (2006-2026)
-- **AI**: Ollama (qwen2.5, gemma3, gemma4, mistral, leo-mistral) + MLX (Mistral-7B)
-  - Temperature sweep: 0.3, 0.7, 1.0
-  - Target: 450K AI sentences from 18 model×temp combinations
+- **Human**: 
+  - Gesetze-im-Internet (6,120 XMLs) ✓
+  - Open Legal Data (HF datasets, 16.9 GB, needs HF login + accepted conditions)
+  - Bundestag protocols (AJAX endpoint, 3 periods, 2017–2026)
+- **AI**: 5 models × 3 temperatures (0.3, 0.7, 1.0)
+  - Ollama: qwen2.5:7b, gemma3:12b, gemma4, mistral
+  - MLX: Mistral-7B-Instruct-v0.3-4bit (Mistral-7B-Instruct-v0.3-4bit)
+  - Target: 200 sentences per combo (`SENTENCES_PER_COMBINATION` in config.py)
+  - Current: 10 of 15 combos complete
 
 ## Key Design Decisions
 
-- **Precision-focused**: threshold calibration at 0.5, 0.7, 0.8, 0.9, 0.95
+- **Precision-focused**: threshold calibration sweep at 0.5–0.95
 - **Hard set**: 200 curated Grundgesetz/BVerfG excerpts for FP validation
 - **Stepwise features**: TF-IDF first, then statistical (perplexity, burstiness, lexical diversity)
-- **Models**: Logistic Regression + Random Forest (baselines), gbert-base + LoRA (advanced)
-- **Experiment tracking**: MLflow with local file store
+- **Models**: Logistic Regression + Random Forest (baselines, sklearn Pipelines), gbert-base + LoRA (advanced)
+- **Experiment tracking**: MLflow with local file store (`mlruns/`)
+- **MLX**: Python API with module-level model cache (not subprocess), temperature via `make_sampler(temp=...)`
+- **Selective generation**: `--models mistral qwen2.5 mlx` to run specific models
+- **Leo-mistral**: Dropped — not available on Ollama
 
 ## Requirements
 
-- Python >= 3.14
-- Apple Silicon (M-series) recommended for MPS GPU acceleration
-- Ollama for AI text generation
-- ~50 GB disk for full dataset + models
+- Python >= 3.14 (`/opt/homebrew/bin/python3.14`)
+- Apple Silicon (M3 Pro recommended for MPS GPU acceleration, 18 GB RAM)
+- Ollama for AI text generation (`ollama pull qwen2.5 gemma3 gemma4 mistral`)
+- HuggingFace account for OpenLegalData dataset (`hf auth login`)
+- ~55 GB disk for full dataset + models
+
+## Optional: Generate More AI Data
+
+Adjust `SENTENCES_PER_COMBINATION` in `config.py` (default: 200). Run specific models:
+
+```bash
+python main.py --generate --models mistral qwen2.5 mlx
+```
+
+List available models:
+
+```bash
+python main.py --list-models
+```
