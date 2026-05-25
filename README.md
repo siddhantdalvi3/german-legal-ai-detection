@@ -66,7 +66,6 @@ python main.py --serve
 - **Human**: 
   - Gesetze-im-Internet (6,120 XMLs) ✓
   - Open Legal Data (HF datasets, 16.9 GB, needs HF login + accepted conditions)
-  - Bundestag protocols (AJAX endpoint, 3 periods, 2017–2026)
 - **AI**: 5 models × 3 temperatures (0.3, 0.7, 1.0)
   - Ollama: qwen2.5:7b, gemma3:12b, gemma4, mistral
   - MLX: Mistral-7B-Instruct-v0.3-4bit (Mistral-7B-Instruct-v0.3-4bit)

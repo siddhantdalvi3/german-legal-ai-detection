@@ -8,7 +8,6 @@ from config import (
     DATA_DIR,
     GESETZE_DIR,
     OPENLEGALDATA_DIR,
-    BUNDESTAG_DIR,
     AI_GENERATED_DIR,
     PROCESSED_DIR,
     TEST_SPLIT,
@@ -62,31 +61,7 @@ def extract_human_openlegaldata() -> list[dict]:
     return texts
 
 
-def extract_human_bundestag() -> list[dict]:
-    texts = []
-    if not BUNDESTAG_DIR.exists():
-        logger.info(f"  Bundestag directory not found, skipping")
-        return texts
-    for year_dir in sorted(BUNDESTAG_DIR.iterdir()):
-        if not year_dir.is_dir() or not year_dir.name.isdigit():
-            continue
-        for xml_file in year_dir.glob("*.xml"):
-            try:
-                content = xml_file.read_text(encoding="utf-8", errors="replace")
-                import re
-                speeches = re.findall(
-                    r"<rede[^>]*>(.*?)</rede>", content, re.DOTALL
-                )
-                for speech in speeches:
-                    clean = re.sub(r"<[^>]+>", " ", speech)
-                    clean = re.sub(r"\s+", " ", clean).strip()
-                    if len(clean) >= 100:
-                        texts.append({
-                            "text": clean, "label": 0, "source": "bundestag"
-                        })
-            except Exception as e:
-                logger.warning(f"Error parsing {xml_file}: {e}")
-    return texts
+
 
 
 def extract_ai_texts() -> list[dict]:
@@ -140,10 +115,6 @@ def build_dataset():
     logger.info("Extracting human texts from OpenLegalData...")
     human_records.extend(extract_human_openlegaldata())
     logger.info(f"  OpenLegalData: {len(human_records)} paragraphs cumulative")
-
-    logger.info("Extracting human texts from Bundestag...")
-    human_records.extend(extract_human_bundestag())
-    logger.info(f"  Bundestag: {len(human_records)} paragraphs cumulative")
 
     logger.info(f"Total human paragraphs: {len(human_records)}")
 

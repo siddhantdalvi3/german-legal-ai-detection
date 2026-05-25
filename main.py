@@ -66,12 +66,6 @@ def mine():
     except Exception as e:
         logger.warning(f"OpenLegalData mining failed (optional): {e}")
 
-    from scripts.mining_bundestag import mine_bundestag
-    try:
-        mine_bundestag()
-    except Exception as e:
-        logger.warning(f"Bundestag mining failed (optional): {e}")
-
     logger.info("All mining complete!")
 
 

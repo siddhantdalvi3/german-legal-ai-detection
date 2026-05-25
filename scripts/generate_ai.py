@@ -10,6 +10,7 @@ from tqdm import tqdm
 from config import (
     AI_GENERATED_DIR,
     AVAILABLE_MODELS,
+    DEFAULT_GENERATION_MODELS,
     OLLAMA_MODELS,
     MLX_MODEL,
     TEMPERATURES,
@@ -145,9 +146,10 @@ def generate_ai_corpus(models: list[str] | None = None):
     AI_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     if models is None:
-        models = OLLAMA_MODELS + [f"mlx:{MLX_MODEL}"]
+        models = DEFAULT_GENERATION_MODELS + [f"mlx:{MLX_MODEL}"]
     else:
-        ollama_selected = [m for m in OLLAMA_MODELS if any(k in m for k in models)]
+        all_ollama = OLLAMA_MODELS  # includes gemma4 for explicit selection
+        ollama_selected = [m for m in all_ollama if any(k in m for k in models)]
         mlx_selected = [f"mlx:{MLX_MODEL}"] if "mlx" in models else []
         if not ollama_selected and not mlx_selected and models:
             logger.warning(f"No models matched: {models}. Available: {list(AVAILABLE_MODELS)}")
