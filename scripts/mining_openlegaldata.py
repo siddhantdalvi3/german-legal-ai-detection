@@ -5,11 +5,25 @@ from config import OPENLEGALDATA_DIR
 from utils.mining import logger
 
 HF_DATASET = "openlegaldata/court-decisions-germany"
-HF_CONFIG = "dump-20260520-10k"  # ~10k rows, ~50 MB
+HF_CONFIG = "dump-20260520"
+
+
+def cache_valid() -> bool:
+    if not HF_DATASET_CACHE.exists():
+        return False
+    try:
+        from datasets import load_from_disk
+        load_from_disk(str(HF_DATASET_CACHE))
+        return True
+    except Exception:
+        import shutil
+        logger.warning(f"Corrupt cache found, deleting and re-downloading")
+        shutil.rmtree(HF_DATASET_CACHE)
+        return False
 
 
 def download_dump():
-    if HF_DATASET_CACHE.exists():
+    if cache_valid():
         logger.info(f"OpenLegalData cache found, skipping download")
         return
 
@@ -28,8 +42,12 @@ def download_dump():
         return
 
     try:
-        dataset = load_dataset(HF_DATASET, HF_CONFIG, split="train", trust_remote_code=True)
-        dataset.save_to_disk(str(OPENLEGALDATA_DIR / "hf_dataset"))
+        import tempfile
+        with tempfile.TemporaryDirectory(dir=str(OPENLEGALDATA_DIR)) as tmp:
+            tmp_path = Path(tmp) / "hf_dataset"
+            dataset = load_dataset(HF_DATASET, HF_CONFIG, split="train")
+            dataset.save_to_disk(str(tmp_path))
+            tmp_path.rename(HF_DATASET_CACHE)
         logger.info(f"Saved {len(dataset)} rows to disk")
     except Exception as e:
         logger.error(f"Failed to load dataset: {e}")
@@ -45,10 +63,9 @@ HF_DATASET_CACHE = OPENLEGALDATA_DIR / "hf_dataset"
 
 
 def extract_court_decisions(limit: int | None = None) -> list[str]:
-    if not HF_DATASET_CACHE.exists():
-        download_dump()
+    download_dump()
 
-    if not HF_DATASET_CACHE.exists():
+    if not cache_valid():
         logger.warning("OpenLegalData not available, skipping")
         return []
 
