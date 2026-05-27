@@ -5,21 +5,22 @@ Detect AI-generated German legal and administrative texts with a focus on minimi
 ## Quick Start
 
 ```bash
-# One-shot setup (downloads everything ~55 GB, idempotent):
-uv run python download_all.py
+# Setup:
+uv sync                                         # Install Python deps
+python main.py --setup                          # Check environment
 
-# Or step by step:
-uv sync                                # Install Python deps
-python main.py --mine                  # Download human texts
-python main.py --generate              # Generate AI texts (all 15 combos)
-python main.py --generate --models mistral qwen2.5   # Selective generation
-python main.py --preprocess            # Build dataset
-python main.py --train                 # Train models (baseline + gbert)
-python main.py --evaluate              # Evaluate + MLflow logging
+# Pipeline:
+python main.py --mine                           # Download Gesetze-im-Internet
+python main.py --mine --openlegaldata           # + OpenLegalData (optional, needs HF auth)
+python main.py --generate                       # Generate AI texts (all models)
+python main.py --generate --models qwen2.5      # Selective generation
+python main.py --preprocess                     # Build dataset (Gesetze + AI)
+python main.py --train                          # Train baseline models (LR + RF)
+python main.py --evaluate                       # Evaluate + MLflow logging
 
 # Inference:
 python main.py --predict --text "Die Deutsche Bundesbank wird ermächtigt..."
-python main.py --predict --model lr --threshold 0.9 --text "..."
+python main.py --predict --model rf --threshold 0.9 --text "..."
 
 # Interactive mode:
 python main.py --predict
@@ -27,6 +28,15 @@ python main.py --predict
 # API server:
 python main.py --serve
 ```
+
+## Key Results
+
+| Model | Threshold | Precision | Recall | FPR | Hard Set FP (0 FPs ideal) |
+|---|---|---|---|---|---|
+| Logistic Regression | 0.9 | **97.2%** | 88.5% | 0.23% | 19/152 |
+| **Random Forest** | **0.9** | **99.9%** | 11.9% | **0.00%** | **0/152** |
+
+**RF @ thr=0.9** is the production recommendation for false-positive minimization.
 
 ## Project Structure
 
@@ -37,7 +47,6 @@ python main.py --serve
 ├── scripts/
 │   ├── mining.py              # Gesetze-im-Internet miner
 │   ├── mining_openlegaldata.py# OpenLegalData (HF datasets)
-│   ├── mining_bundestag.py    # Bundestag protocols (AJAX endpoint)
 │   ├── generate_ai.py         # Ollama + MLX generation (checkpointed)
 │   ├── preprocessing.py       # Clean, segment, deduplicate
 │   ├── train.py               # Training orchestrator
@@ -54,53 +63,35 @@ python main.py --serve
 ├── docs/
 │   ├── architecture.md        # Pipeline + MLflow structure
 │   ├── dataset.md             # Sources, preprocessing, current state
-│   ├── evaluation.md          # Metrics, thresholds, status
+│   ├── evaluation.md          # Metrics, thresholds, results
 │   └── lit_review/            # 24 papers across 3 topics
-├── data/                      # Raw and processed data
-├── models/                    # Symlink to MLflow artifacts
-└── mlruns/                    # MLflow experiment data
+├── tests/
+│   └── hard_set.jsonl         # 152 human legal sentences for FP validation
+├── data/                      # Raw and processed data (gitignored)
+└── mlruns/                    # MLflow experiment data (gitignored)
 ```
 
-## Data Sources
+## Dataset
 
-- **Human**: 
-  - Gesetze-im-Internet (6,120 XMLs) ✓
-  - Open Legal Data (HF datasets, 16.9 GB, needs HF login + accepted conditions)
-- **AI**: 5 models × 3 temperatures (0.3, 0.7, 1.0)
-  - Ollama: qwen2.5:7b, gemma3:12b, gemma4, mistral
-  - MLX: Mistral-7B-Instruct-v0.3-4bit (Mistral-7B-Instruct-v0.3-4bit)
-  - Target: 200 sentences per combo (`SENTENCES_PER_COMBINATION` in config.py)
-  - Current: 10 of 15 combos complete
-
-## Key Design Decisions
-
-- **Precision-focused**: threshold calibration sweep at 0.5–0.95
-- **Hard set**: 200 curated Grundgesetz/BVerfG excerpts for FP validation
-- **Stepwise features**: TF-IDF first, then statistical (perplexity, burstiness, lexical diversity)
-- **Models**: Logistic Regression + Random Forest (baselines, sklearn Pipelines), gbert-base + LoRA (advanced)
-- **Experiment tracking**: MLflow with local file store (`mlruns/`)
-- **MLX**: Python API with module-level model cache (not subprocess), temperature via `make_sampler(temp=...)`
-- **Selective generation**: `--models mistral qwen2.5 mlx` to run specific models
-- **Leo-mistral**: Dropped — not available on Ollama
+- **Human**: 6,119 Gesetze-im-Internet XMLs → 707,714 sentences
+- **AI**: 9,783 paragraphs from qwen2.5:7b (6,546), gemma3:12b (1,500), MLX Mistral (1,500), gemma4 (partial) → 66,628 sentences after preprocessing
+- **Total**: 774,342 sentences (91.4% Human, 8.6% AI)
+- **Average sentence length**: 25 words
+- **OpenLegalData**: Optional (`--openlegaldata` flag)
 
 ## Requirements
 
 - Python >= 3.12 (tested on 3.14, `/opt/homebrew/bin/python3.14`)
-- Apple Silicon (M3 Pro recommended for MPS GPU acceleration, 18 GB RAM)
-- Ollama for AI text generation (`ollama pull qwen2.5 gemma3 gemma4 mistral`)
-- HuggingFace account for OpenLegalData dataset (`hf auth login`)
+- Apple Silicon (M3 Pro, 18 GB RAM) for MPS GPU acceleration
+- Ollama for AI text generation (`ollama pull qwen2.5 gemma3 gemma4`)
 - ~55 GB disk for full dataset + models
 
-## Optional: Generate More AI Data
+## Key Design Decisions
 
-Adjust `SENTENCES_PER_COMBINATION` in `config.py` (default: 200). Run specific models:
-
-```bash
-python main.py --generate --models mistral qwen2.5 mlx
-```
-
-List available models:
-
-```bash
-python main.py --list-models
-```
+- **500 paragraphs per model×temp combo**: Final choice after real generation rates measured (~10.6 s/sent). See `docs/dataset.md` for full sizing analysis.
+- **Precision-focused**: threshold calibration sweep at 0.5–0.95.
+- **Hard set**: 152 curated human legal sentences for FP validation.
+- **Models**: Logistic Regression + Random Forest (sklearn Pipelines), gbert-base + LoRA configured but not viable on MPS (~75 hrs estimated).
+- **RF @ thr=0.9 achieves 0 false positives** on the hard set.
+- **Experiment tracking**: MLflow with local file store (`mlruns/`).
+- **gbert-base tokenizer/model**: Requires `BertTokenizer` directly (not `AutoTokenizer`) due to missing fast tokenizer serialization; requires `BertConfig`/`BertForSequenceClassification` (not `Auto*`) due to missing `model_type` field.

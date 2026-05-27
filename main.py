@@ -55,16 +55,19 @@ def setup_environment():
 
 
 @stage
-def mine():
+def mine(use_openlegaldata: bool = False):
     from scripts.mining import Miner
     miner = Miner()
     miner.mine_gesetze_im_internet()
 
-    from scripts.mining_openlegaldata import mine_openlegaldata
-    try:
-        mine_openlegaldata()
-    except Exception as e:
-        logger.warning(f"OpenLegalData mining failed (optional): {e}")
+    if use_openlegaldata:
+        from scripts.mining_openlegaldata import mine_openlegaldata
+        try:
+            mine_openlegaldata()
+        except Exception as e:
+            logger.warning(f"OpenLegalData mining failed (optional): {e}")
+    else:
+        logger.info("Skipping OpenLegalData (use --openlegaldata to enable)")
 
     logger.info("All mining complete!")
 
@@ -76,9 +79,9 @@ def generate_ai(models: list[str] | None = None):
 
 
 @stage
-def preprocess():
+def preprocess(use_openlegaldata: bool = False):
     from scripts.preprocessing import build_dataset
-    build_dataset()
+    build_dataset(use_openlegaldata=use_openlegaldata)
 
 
 @stage
@@ -162,7 +165,8 @@ def main():
     args = parser.parse_known_args()[0]
 
     parser.add_argument("--setup", action="store_true", help="Check environment")
-    parser.add_argument("--mine", action="store_true", help="Mine human text sources")
+    parser.add_argument("--mine", action="store_true", help="Mine human text sources (Gesetze-im-Internet only)")
+    parser.add_argument("--openlegaldata", action="store_true", help="Include OpenLegalData in mining/preprocessing")
     parser.add_argument("--generate", action="store_true", help="Generate AI text corpus")
     parser.add_argument("--models", nargs="*", default=None,
                         help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
@@ -192,11 +196,11 @@ def main():
     if args.setup:
         setup_environment()
     if args.mine:
-        mine()
+        mine(use_openlegaldata=args.openlegaldata)
     if args.generate:
         generate_ai(args.models)
     if args.preprocess:
-        preprocess()
+        preprocess(use_openlegaldata=args.openlegaldata)
     if args.train:
         train()
     if args.evaluate:
@@ -207,9 +211,9 @@ def main():
     if args.all:
         logger.info("Starting full pipeline...")
         setup_environment()
-        mine()
+        mine(use_openlegaldata=args.openlegaldata)
         generate_ai(args.models)
-        preprocess()
+        preprocess(use_openlegaldata=args.openlegaldata)
         train()
         evaluate()
 

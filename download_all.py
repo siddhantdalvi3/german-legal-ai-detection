@@ -128,13 +128,15 @@ def download_models():
 
 def download_data():
     print("\n=== Human Data Mining ===")
-    print("  (Gesetze ~50 MB + Bundestag ~320 MB + OpenLegalData ~16.9 GB)")
+    print("  (Gesetze ~50 MB)")
     print("  Each source skips if already downloaded.")
-    print("  OpenLegalData requires HF login + accepted conditions:")
+    print()
+    print("  OpenLegalData (~16.9 GB) is optional:")
     print("    hf auth login")
+    print("    python main.py --mine --openlegaldata")
     print("    https://huggingface.co/datasets/openlegaldata/court-decisions-germany")
     venv_python = str(PROJECT_ROOT / ".venv" / "bin" / "python")
-    run([venv_python, "main.py", "--mine"], "mine all sources", timeout=7200)
+    run([venv_python, "main.py", "--mine"], "mine Gesetze-im-Internet", timeout=7200)
 
 
 def main():

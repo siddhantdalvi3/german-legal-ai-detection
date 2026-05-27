@@ -104,7 +104,7 @@ def sentence_split_records(records: list[dict]) -> list[dict]:
     return split_records
 
 
-def build_dataset():
+def build_dataset(use_openlegaldata: bool = False):
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     human_records = []
@@ -112,9 +112,12 @@ def build_dataset():
     human_records.extend(extract_human_gesetze())
     logger.info(f"  Gesetze: {len(human_records)} paragraphs")
 
-    logger.info("Extracting human texts from OpenLegalData...")
-    human_records.extend(extract_human_openlegaldata())
-    logger.info(f"  OpenLegalData: {len(human_records)} paragraphs cumulative")
+    if use_openlegaldata:
+        logger.info("Extracting human texts from OpenLegalData...")
+        human_records.extend(extract_human_openlegaldata())
+        logger.info(f"  OpenLegalData: {len(human_records)} paragraphs cumulative")
+    else:
+        logger.info("Skipping OpenLegalData (use --openlegaldata flag to enable)")
 
     logger.info(f"Total human paragraphs: {len(human_records)}")
 

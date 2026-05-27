@@ -13,6 +13,7 @@ from config import (
     DEFAULT_GENERATION_MODELS,
     OLLAMA_MODELS,
     MLX_MODEL,
+    MLX_VLM_MODEL,
     TEMPERATURES,
     SENTENCES_PER_COMBINATION,
 )
@@ -125,6 +126,34 @@ def mlx_generate(prompt: str, temperature: float) -> str:
     return response.strip()
 
 
+_mlx_vlm_model = None
+_mlx_vlm_processor = None
+
+
+def mlx_vlm_generate(prompt: str, temperature: float) -> str:
+    global _mlx_vlm_model, _mlx_vlm_processor
+
+    if _mlx_vlm_model is None:
+        logger.info(f"Loading MLX VLM model: {MLX_VLM_MODEL}")
+        from mlx_vlm import load
+        _mlx_vlm_model, _mlx_vlm_processor = load(MLX_VLM_MODEL)
+        logger.info("MLX VLM model loaded")
+
+    from mlx_vlm import generate as vlm_generate
+    from mlx_vlm.sample_utils import make_sampler
+    from mlx_vlm.utils import prepare_inputs
+
+    response = vlm_generate(
+        _mlx_vlm_model, _mlx_vlm_processor,
+        prompt=prompt,
+        image=None,
+        sampler=make_sampler(temp=temperature),
+        max_tokens=500,
+        verbose=False,
+    )
+    return response.strip()
+
+
 def get_checkpoint_path(model_key: str, temperature: float) -> Path:
     temp_str = str(temperature).replace(".", "_")
     return AI_GENERATED_DIR / f"{model_key}__temp_{temp_str}.jsonl"
@@ -146,15 +175,16 @@ def generate_ai_corpus(models: list[str] | None = None):
     AI_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     if models is None:
-        models = DEFAULT_GENERATION_MODELS + [f"mlx:{MLX_MODEL}"]
+        models = DEFAULT_GENERATION_MODELS
     else:
-        all_ollama = OLLAMA_MODELS  # includes gemma4 for explicit selection
+        all_ollama = OLLAMA_MODELS
         ollama_selected = [m for m in all_ollama if any(k in m for k in models)]
         mlx_selected = [f"mlx:{MLX_MODEL}"] if "mlx" in models else []
-        if not ollama_selected and not mlx_selected and models:
+        mlx_vlm_selected = [f"mlx_vlm:{MLX_VLM_MODEL}"] if "mlx_gemma4" in models else []
+        if not ollama_selected and not mlx_selected and not mlx_vlm_selected and models:
             logger.warning(f"No models matched: {models}. Available: {list(AVAILABLE_MODELS)}")
             return
-        models = ollama_selected + mlx_selected
+        models = ollama_selected + mlx_selected + mlx_vlm_selected
 
     logger.info(f"Models to run: {models}")
 
@@ -200,7 +230,9 @@ def generate_ai_corpus(models: list[str] | None = None):
                     prompt = PROMPT_TEMPLATE.format(topic=topic)
 
                     try:
-                        if model.startswith("mlx:"):
+                        if model.startswith("mlx_vlm:"):
+                            response = mlx_vlm_generate(prompt, temp)
+                        elif model.startswith("mlx:"):
                             response = mlx_generate(prompt, temp)
                         else:
                             response = ollama_generate(model, prompt, temp)

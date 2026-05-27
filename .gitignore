@@ -7,7 +7,7 @@ mlruns/
 mlflow.db
 checkpoints/
 logs/
-models/
+/models/
 data/
 german_ai_text_detector.egg-info/
 
