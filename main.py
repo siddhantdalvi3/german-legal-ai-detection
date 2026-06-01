@@ -10,6 +10,8 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+from utils.mining import logger, setup_logging
+
 LEVELS = {
     "--mine": "Mining: Downloading human text sources...",
     "--generate": "Generation: Creating AI text corpus...",
