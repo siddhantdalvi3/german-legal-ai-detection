@@ -10,4 +10,6 @@ logs/
 /models/
 data/
 german_ai_text_detector.egg-info/
+student_project.pdf
+.opencode/
 
