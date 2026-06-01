@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,6 +13,7 @@ from config import (
     AI_GENERATED_DIR,
     AVAILABLE_MODELS,
     DEFAULT_GENERATION_MODELS,
+    GESETZE_DIR,
     OLLAMA_MODELS,
     MLX_MODEL,
     MLX_VLM_MODEL,
@@ -27,46 +29,11 @@ PROMPT_TEMPLATE = (
     "Du bist Jurist im Bundesministerium. "
     "Schreibe einen formellen juristischen Text auf Deutsch über folgendes Thema: {topic}. "
     "Verwende präzise juristische Fachsprache und einen offiziellen Amtsstil. "
-    "Der Text soll 5-10 Sätze lang sein."
+    "Der Text soll 5-10 Sätze lang sein. "
+    "Beziehe dich konkret auf die einschlägigen Gesetze und Paragraphen."
 )
 
-TOPICS = [
-    "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht",
-    "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB",
-    "Die Anfechtung einer Verwaltungsakt nach § 48 VwVfG",
-    "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht",
-    "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit",
-    "Die Anforderungen an eine ordnungsgemäße Klageerhebung vor dem Verwaltungsgericht",
-    "Die Voraussetzungen des polizeilichen Notstandes nach allgemeinem Gefahrenabwehrrecht",
-    "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB",
-    "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht",
-    "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB",
-    "Die Auslegung von Steuergesetzen nach der Abgabenordnung",
-    "Die Voraussetzungen der einstweiligen Anordnung nach § 123 VwGO",
-    "Die Rechtsstellung des Betriebsrats nach dem Betriebsverfassungsgesetz",
-    "Die Voraussetzungen der Pfändung von Arbeitseinkommen",
-    "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr",
-    "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung",
-    "Die Anforderungen an einen wirksamen Arbeitsvertrag nach deutschem Recht",
-    "Die Voraussetzungen der Enteignung nach Art. 14 GG",
-    "Die Rechtsmittel gegen einen belastenden Verwaltungsakt",
-    "Die Grundsätze der europäischen Datenschutzgrundverordnung",
-    "Die Auswirkungen des § 242 StGB auf die tägliche Polizeiarbeit",
-    "Die Anforderungen an eine wirksame Kündigung eines Mietverhältnisses",
-    "Die Rechtsprechung zur Störerhaftung im Internetrecht",
-    "Die Regeln zur Geschwindigkeitsüberschreitung im Straßenverkehr",
-    "Die Voraussetzungen der Unterlassungsklage im Wettbewerbsrecht",
-    "Die Berechnung des Pflichtteils nach dem Bürgerlichen Gesetzbuch",
-    "Die Anforderungen an einen Bauantrag nach der Musterbauordnung",
-    "Die Durchführung einer Hauptverhandlung im Strafprozess",
-    "Die Grundlagen der Sozialversicherungspflicht von Arbeitnehmern",
-    "Die Rechtsfolgen einer fehlerhaften Bilanzierung im Handelsrecht",
-    "Die Voraussetzungen der Prozesskostenhilfe im Zivilprozess",
-    "Die Haftung des Frachtführers nach dem Handelsgesetzbuch",
-    "Die Beihilfefähigkeit von Aufwendungen im öffentlichen Dienst",
-    "Die Anerkennung ausländischer Entscheidungen im Familienrecht",
-    "Die Voraussetzungen des Besitzschutzes nach § 861 BGB",
-]
+TOPICS_CACHE = None
 
 
 def check_ollama_running() -> bool:
@@ -89,6 +56,59 @@ def start_ollama():
             return
         time.sleep(1)
     raise RuntimeError("Failed to start Ollama server")
+
+
+def load_topics() -> list[str]:
+    global TOPICS_CACHE
+    if TOPICS_CACHE is not None:
+        return TOPICS_CACHE
+
+    topics_path = GESETZE_DIR / "topics.jsonl"
+    if topics_path.exists():
+        lines = [l.strip() for l in topics_path.read_text().splitlines() if l.strip()]
+        TOPICS_CACHE = [json.loads(l)["heading"] for l in lines]
+        logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from cache")
+        return TOPICS_CACHE
+
+    logger.info("Extracting topics from Gesetze XMLs (first run)...")
+    from bs4 import BeautifulSoup
+    from utils.mining import find_xml_files
+
+    headings = set()
+    for xml_file in find_xml_files(GESETZE_DIR):
+        try:
+            soup = BeautifulSoup(xml_file.read_bytes(), "xml")
+            for norm in soup.find_all("norm"):
+                enbez = norm.find("enbez")
+                titel = norm.find("titel")
+                if not enbez and not titel:
+                    continue
+                parts = [e.text.strip() for e in [enbez, titel] if e and e.text.strip()]
+                heading = " ".join(parts)
+                text_el = norm.find("text")
+                if heading and text_el and len(text_el.text.strip()) >= 50:
+                    headings.add(heading)
+        except Exception:
+            continue
+
+    # Filter out noisy placeholders and very short headings
+    result = sorted(
+        h for h in headings
+        if "(XXXX)" not in h and len(h) >= 10
+    )
+    with open(topics_path, "w") as f:
+        for h in result:
+            f.write(json.dumps({"heading": h}, ensure_ascii=False) + "\n")
+
+    logger.info(f"Extracted {len(result):,} unique topics")
+    TOPICS_CACHE = result
+    return result
+
+
+def get_topic(topics: list[str], idx: int) -> str:
+    if idx < len(topics):
+        return topics[idx]
+    return topics[idx % len(topics)]
 
 
 def ollama_generate(model: str, prompt: str, temperature: float) -> str:
@@ -209,6 +229,7 @@ def generate_ai_corpus(models: list[str] | None = None):
         logger.info(f"Pulling model: {model}")
         subprocess.run(["ollama", "pull", model], capture_output=True, timeout=600)
 
+    topics = load_topics()
     total_sentences = 0
     target = SENTENCES_PER_COMBINATION
 
@@ -246,7 +267,7 @@ def generate_ai_corpus(models: list[str] | None = None):
                     # Submit up to concurrency prompts at once
                     while len(futures) < concurrency and sentences_in_batch + len(futures) < target:
                         idx = topic_offset + sentences_in_batch + len(futures)
-                        topic = TOPICS[idx % len(TOPICS)]
+                        topic = get_topic(topics, idx)
                         prompt = PROMPT_TEMPLATE.format(topic=topic)
 
                         if model.startswith("mlx_vlm:"):
