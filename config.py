@@ -38,6 +38,7 @@ OPENLEGALDATA_DUMP_URL = "https://static.openlegaldata.io/dumps/latest/"
 
 AVAILABLE_MODELS = {
     "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
+    "qwen3": {"type": "ollama", "name": "qwen3:14b", "desc": "Qwen 3 14B"},
     "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
     "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4 15B"},
     "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
