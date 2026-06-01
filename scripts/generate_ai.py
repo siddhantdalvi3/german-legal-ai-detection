@@ -2,6 +2,7 @@ import json
 import logging
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -95,6 +96,8 @@ def ollama_generate(model: str, prompt: str, temperature: float) -> str:
         "model": model,
         "prompt": prompt,
         "temperature": temperature,
+        "num_predict": 256,
+        "keep_alive": "5m",
         "stream": False,
     }
     resp = requests.post(OLLAMA_API, json=payload, timeout=120)
@@ -210,6 +213,14 @@ def generate_ai_corpus(models: list[str] | None = None):
     target = SENTENCES_PER_COMBINATION
 
     for model in models:
+        # Determine concurrency based on model size
+        if any(m in model for m in ("gemma4", "qwen3:14b", "mlx_vlm")):
+            concurrency = 2
+        elif any(m in model for m in ("gemma3:12b", "mlx:")):
+            concurrency = 3
+        else:
+            concurrency = 4  # small models: qwen2.5:7b, mistral
+
         for temp in TEMPERATURES:
             model_key = model.replace("/", "_").replace(":", "_")
             ckpt_path = get_checkpoint_path(model_key, temp)
@@ -225,42 +236,48 @@ def generate_ai_corpus(models: list[str] | None = None):
                 total_sentences += sentences_in_batch
                 continue
 
-            pbar = tqdm(
-                total=target,
-                initial=sentences_in_batch,
-                desc=f"{model_key} t={temp}",
-            )
-            topic_idx = sentences_in_batch
+            remaining = target - sentences_in_batch
+            pbar = tqdm(total=target, initial=sentences_in_batch, desc=f"{model_key} t={temp}")
+            topic_offset = sentences_in_batch
 
-            with open(ckpt_path, "a") as f:
+            with open(ckpt_path, "a") as f, ThreadPoolExecutor(max_workers=concurrency) as pool:
+                futures = {}
                 while sentences_in_batch < target:
-                    topic = TOPICS[topic_idx % len(TOPICS)]
-                    topic_idx += 1
+                    # Submit up to concurrency prompts at once
+                    while len(futures) < concurrency and sentences_in_batch + len(futures) < target:
+                        idx = topic_offset + sentences_in_batch + len(futures)
+                        topic = TOPICS[idx % len(TOPICS)]
+                        prompt = PROMPT_TEMPLATE.format(topic=topic)
 
-                    prompt = PROMPT_TEMPLATE.format(topic=topic)
-
-                    try:
                         if model.startswith("mlx_vlm:"):
-                            response = mlx_vlm_generate(prompt, temp)
+                            future = pool.submit(mlx_vlm_generate, prompt, temp)
                         elif model.startswith("mlx:"):
-                            response = mlx_generate(prompt, temp)
+                            future = pool.submit(mlx_generate, prompt, temp)
                         else:
-                            response = ollama_generate(model, prompt, temp)
+                            future = pool.submit(ollama_generate, model, prompt, temp)
+                        futures[future] = topic
 
-                        record = {
-                            "topic": topic,
-                            "model": model_key,
-                            "temperature": temp,
-                            "response": response,
-                        }
-                        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        f.flush()
-                        sentences_in_batch += 1
-                        total_sentences += 1
-                        pbar.update(1)
-                    except Exception as e:
-                        logger.error(f"Generation failed: {e}")
-                        time.sleep(5)
+                    # Collect completed results
+                    done_futures = {f for f in futures if f.done()}
+                    for future in done_futures:
+                        topic = futures.pop(future)
+                        try:
+                            response = future.result()
+                            f.write(json.dumps({
+                                "topic": topic,
+                                "model": model_key,
+                                "temperature": temp,
+                                "response": response,
+                            }, ensure_ascii=False) + "\n")
+                            f.flush()
+                            sentences_in_batch += 1
+                            total_sentences += 1
+                            pbar.update(1)
+                        except Exception as e:
+                            logger.error(f"Generation failed: {e}")
+
+                    if not done_futures:
+                        time.sleep(0.1)
 
             pbar.close()
             logger.info(
