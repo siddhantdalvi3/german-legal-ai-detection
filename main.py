@@ -5,7 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from utils.mining import logger, setup_logging
+# Fix Windows console encoding for Unicode
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 LEVELS = {
     "--mine": "Mining: Downloading human text sources...",
