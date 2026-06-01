@@ -11,6 +11,7 @@ from config import (
     DEFAULT_THRESHOLD,
     BERT_MODEL,
     BERT_MAX_LENGTH,
+    get_device,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,10 +86,10 @@ class PredictionPipeline:
         if hasattr(self.model, "peft_config"):
             self.model = PeftModel.from_pretrained(self.model, model_path)
 
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = get_device()
         self.model.to(device)
         self.model.eval()
-        logger.info(f"Loaded gbert model from {model_path}")
+        logger.info(f"Loaded gbert model on {device} from {model_path}")
 
     def predict(self, text: str) -> dict:
         if self.model_type == "gbert":
@@ -113,6 +114,7 @@ class PredictionPipeline:
         }
 
     def _predict_gbert(self, text: str) -> dict:
+        device = next(self.model.parameters()).device
         inputs = self.tokenizer(
             text,
             return_tensors="pt",
@@ -120,7 +122,6 @@ class PredictionPipeline:
             truncation=True,
             max_length=BERT_MAX_LENGTH,
         )
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
         with torch.no_grad():

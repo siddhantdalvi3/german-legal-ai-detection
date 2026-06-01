@@ -17,11 +17,11 @@ from transformers import (
     EarlyStoppingCallback,
 )
 
-from config import BERT_MODEL, BERT_MAX_LENGTH, CLASSIFIER_THRESHOLDS, RANDOM_SEED
+from config import BERT_MODEL, BERT_MAX_LENGTH, CLASSIFIER_THRESHOLDS, RANDOM_SEED, get_device, supports_fp16
 
 logger = logging.getLogger(__name__)
 
-device = "mps" if torch.backends.mps.is_available() else "cpu"
+device = get_device()
 logger.info(f"Transformer using device: {device}")
 
 
@@ -123,7 +123,7 @@ def train_gbert(texts_train, labels_train, texts_val, labels_val,
         load_best_model_at_end=True,
         metric_for_best_model="precision_at_0.9",
         greater_is_better=True,
-        fp16=False,
+        fp16=supports_fp16(),
         dataloader_num_workers=2,
         report_to="mlflow",
         seed=RANDOM_SEED,

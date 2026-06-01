@@ -16,6 +16,7 @@ from config import (
     MLX_VLM_MODEL,
     TEMPERATURES,
     SENTENCES_PER_COMBINATION,
+    is_macos,
 )
 from utils.mining import logger
 
@@ -185,6 +186,15 @@ def generate_ai_corpus(models: list[str] | None = None):
             logger.warning(f"No models matched: {models}. Available: {list(AVAILABLE_MODELS)}")
             return
         models = ollama_selected + mlx_selected + mlx_vlm_selected
+
+    has_mlx = any(m.startswith("mlx:") for m in models)
+    has_mlx_vlm = any(m.startswith("mlx_vlm:") for m in models)
+    if (has_mlx or has_mlx_vlm) and not is_macos():
+        logger.warning("MLX models are only supported on macOS. Skipping MLX models.")
+        models = [m for m in models if not m.startswith("mlx") and not m.startswith("mlx_vlm")]
+        if not models:
+            logger.error("No models remaining after removing MLX. Aborting.")
+            return
 
     logger.info(f"Models to run: {models}")
 

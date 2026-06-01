@@ -1,7 +1,28 @@
 import os
+import platform
 from pathlib import Path
 
+import torch
+
 PROJECT_ROOT = Path(__file__).parent.absolute()
+
+
+def get_device() -> str:
+    """Auto-detect best available compute device: CUDA > MPS > CPU."""
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def supports_fp16() -> bool:
+    """fp16 is beneficial on CUDA; not reliable on MPS."""
+    return get_device() == "cuda"
+
+
+def is_macos() -> bool:
+    return platform.system() == "Darwin"
 
 DATA_DIR = PROJECT_ROOT / "data"
 PROCESSED_DIR = DATA_DIR / "processed"
@@ -18,7 +39,7 @@ OPENLEGALDATA_DUMP_URL = "https://static.openlegaldata.io/dumps/latest/"
 AVAILABLE_MODELS = {
     "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
     "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
-    "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4 (optional ~15 GB)"},
+    "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4 15B"},
     "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
     "mlx": {
         "type": "mlx",
@@ -32,14 +53,8 @@ AVAILABLE_MODELS = {
     },
 }
 
-RUN_OPTIONAL = True
-OPTIONAL_MODELS = [
-    m["name"] for m in AVAILABLE_MODELS.values() if "optional" in m["desc"].lower()
-]
 OLLAMA_MODELS = [m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "ollama"]
-DEFAULT_GENERATION_MODELS = [m for m in OLLAMA_MODELS if m not in OPTIONAL_MODELS] + (
-    OPTIONAL_MODELS if RUN_OPTIONAL else []
-)
+DEFAULT_GENERATION_MODELS = list(OLLAMA_MODELS)
 MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
 MLX_VLM_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm")
 
