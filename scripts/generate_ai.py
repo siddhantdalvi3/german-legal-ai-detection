@@ -101,13 +101,27 @@ def load_topics() -> list[str]:
             f.write(json.dumps({"heading": h}, ensure_ascii=False) + "\n")
 
     logger.info(f"Extracted {len(result):,} unique topics")
+    if not result:
+        logger.warning("No topics extracted from Gesetze XMLs. Using fallback list.")
+        result = [
+            "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht",
+            "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB",
+            "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht",
+            "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit",
+            "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB",
+            "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht",
+            "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB",
+            "Die Voraussetzungen der Pfändung von Arbeitseinkommen",
+            "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr",
+            "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung",
+        ]
     TOPICS_CACHE = result
     return result
 
 
 def get_topic(topics: list[str], idx: int) -> str:
-    if idx < len(topics):
-        return topics[idx]
+    if not topics:
+        return "Rechtliche Grundlagen und aktuelle Entwicklungen"
     return topics[idx % len(topics)]
 
 
