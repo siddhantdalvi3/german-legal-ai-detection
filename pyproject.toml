@@ -23,8 +23,8 @@ dependencies = [
     "pydantic>=2.10.0",
     "colorlog>=6.9.0",
     "rapidfuzz>=3.11.0",
-    "mlx-lm>=0.31.0",
-    "mlx-vlm>=0.4.3",
+    "mlx-lm>=0.31.0; sys_platform == 'darwin'",
+    "mlx-vlm>=0.4.3; sys_platform == 'darwin'",
     "beautifulsoup4>=4.12.0",
 ]
 
