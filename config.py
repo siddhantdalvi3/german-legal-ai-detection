@@ -42,6 +42,9 @@ AVAILABLE_MODELS = {
     "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
     "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4 15B"},
     "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
+    "llama3.1": {"type": "ollama", "name": "llama3.1:8b", "desc": "Llama 3.1 8B"},
+    "deepseek": {"type": "ollama", "name": "deepseek-r1:7b", "desc": "DeepSeek R1 7B"},
+    "phi4": {"type": "ollama", "name": "phi4:14b", "desc": "Phi-4 14B"},
     "mlx": {
         "type": "mlx",
         "name": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
@@ -59,8 +62,8 @@ DEFAULT_GENERATION_MODELS = list(OLLAMA_MODELS)
 MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
 MLX_VLM_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm")
 
-TEMPERATURES = [0.3, 0.7, 1.0]
-SENTENCES_PER_COMBINATION = 500  # 9 combos (3 Ollama models × 3 temps) × 500 = 4,500 AI; total ~444K with Gesetze
+TEMPERATURES = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
+SENTENCES_PER_COMBINATION = 2000
 AI_TARGET = 4_500
 
 HUMAN_TARGET = 500_000
