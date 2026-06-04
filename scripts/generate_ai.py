@@ -14,9 +14,6 @@ from config import (
     AVAILABLE_MODELS,
     DEFAULT_GENERATION_MODELS,
     GESETZE_DIR,
-    OLLAMA_MODELS,
-    MLX_MODEL,
-    MLX_VLM_MODEL,
     TEMPERATURES,
     SENTENCES_PER_COMBINATION,
     is_macos,
@@ -139,58 +136,31 @@ def ollama_generate(model: str, prompt: str, temperature: float) -> str:
     return resp.json()["response"].strip()
 
 
-_mlx_model = None
-_mlx_tokenizer = None
+_mlx_cache: dict[str, tuple] = {}
 
 
-def mlx_generate(prompt: str, temperature: float) -> str:
-    global _mlx_model, _mlx_tokenizer
+def mlx_generate(model_name: str, prompt: str, temperature: float) -> str:
+    global _mlx_cache
 
-    if _mlx_model is None:
-        logger.info(f"Loading MLX model: {MLX_MODEL}")
+    if model_name not in _mlx_cache:
+        logger.info(f"Loading MLX model: {model_name}")
         from mlx_lm import load
-        _mlx_model, _mlx_tokenizer = load(MLX_MODEL)
-        logger.info("MLX model loaded")
+        model, tokenizer = load(model_name)
+        _mlx_cache[model_name] = (model, tokenizer)
+        logger.info(f"MLX model loaded: {model_name}")
+    else:
+        model, tokenizer = _mlx_cache[model_name]
 
     from mlx_lm import generate
     from mlx_lm.sample_utils import make_sampler
     response = generate(
-        _mlx_model, _mlx_tokenizer,
+        model, tokenizer,
         prompt=prompt,
         sampler=make_sampler(temp=temperature),
         max_tokens=500,
         verbose=False,
     )
     return response.strip()
-
-
-_mlx_vlm_model = None
-_mlx_vlm_processor = None
-
-
-def mlx_vlm_generate(prompt: str, temperature: float) -> str:
-    global _mlx_vlm_model, _mlx_vlm_processor
-
-    if _mlx_vlm_model is None:
-        logger.info(f"Loading MLX VLM model: {MLX_VLM_MODEL}")
-        from mlx_vlm import load
-        _mlx_vlm_model, _mlx_vlm_processor = load(MLX_VLM_MODEL)
-        logger.info("MLX VLM model loaded")
-
-    from mlx_vlm import generate as vlm_generate
-    from mlx_vlm.sample_utils import make_sampler
-    from mlx_vlm.utils import prepare_inputs
-
-    response = vlm_generate(
-        _mlx_vlm_model, _mlx_vlm_processor,
-        prompt=prompt,
-        image=None,
-        sampler=make_sampler(temp=temperature),
-        max_tokens=500,
-        verbose=False,
-    )
-    return response.strip()
-
 
 def get_checkpoint_path(model_key: str, temperature: float) -> Path:
     temp_str = str(temperature).replace(".", "_")
@@ -215,20 +185,30 @@ def generate_ai_corpus(models: list[str] | None = None):
     if models is None:
         models = DEFAULT_GENERATION_MODELS
     else:
-        all_ollama = OLLAMA_MODELS
-        ollama_selected = [m for m in all_ollama if any(k in m for k in models)]
-        mlx_selected = [f"mlx:{MLX_MODEL}"] if "mlx" in models else []
-        mlx_vlm_selected = [f"mlx_vlm:{MLX_VLM_MODEL}"] if "mlx_gemma4" in models else []
-        if not ollama_selected and not mlx_selected and not mlx_vlm_selected and models:
-            logger.warning(f"No models matched: {models}. Available: {list(AVAILABLE_MODELS)}")
+        from config import AVAILABLE_MODELS
+        resolved = []
+        for key in models:
+            if key not in AVAILABLE_MODELS:
+                logger.warning(f"Unknown model key '{key}'. Available: {list(AVAILABLE_MODELS)}")
+                continue
+            info = AVAILABLE_MODELS[key]
+            mtype = info["type"]
+            mname = info["name"]
+            if mtype == "ollama":
+                resolved.append(mname)
+            elif mtype == "mlx":
+                resolved.append(f"mlx:{mname}")
+            elif mtype == "mlx_vlm":
+                resolved.append(f"mlx_vlm:{mname}")
+        if not resolved:
+            logger.error("No valid models selected. Aborting.")
             return
-        models = ollama_selected + mlx_selected + mlx_vlm_selected
+        models = resolved
 
     has_mlx = any(m.startswith("mlx:") for m in models)
-    has_mlx_vlm = any(m.startswith("mlx_vlm:") for m in models)
-    if (has_mlx or has_mlx_vlm) and not is_macos():
+    if has_mlx and not is_macos():
         logger.warning("MLX models are only supported on macOS. Skipping MLX models.")
-        models = [m for m in models if not m.startswith("mlx") and not m.startswith("mlx_vlm")]
+        models = [m for m in models if not m.startswith("mlx:")]
         if not models:
             logger.error("No models remaining after removing MLX. Aborting.")
             return
@@ -249,9 +229,11 @@ def generate_ai_corpus(models: list[str] | None = None):
 
     for model in models:
         # Determine concurrency based on model size
-        if any(m in model for m in ("gemma4", "qwen3:14b", "mlx_vlm")):
+        if model.startswith("mlx:"):
+            concurrency = 1  # MLX models are loaded per-process; avoid OOM
+        elif any(m in model for m in ("gemma4", "qwen3:14b", "mlx_vlm")):
             concurrency = 2
-        elif any(m in model for m in ("gemma3:12b", "mlx:")):
+        elif "gemma3:12b" in model:
             concurrency = 3
         else:
             concurrency = 4  # small models: qwen2.5:7b, mistral
@@ -284,10 +266,9 @@ def generate_ai_corpus(models: list[str] | None = None):
                         topic = get_topic(topics, idx)
                         prompt = PROMPT_TEMPLATE.format(topic=topic)
 
-                        if model.startswith("mlx_vlm:"):
-                            future = pool.submit(mlx_vlm_generate, prompt, temp)
-                        elif model.startswith("mlx:"):
-                            future = pool.submit(mlx_generate, prompt, temp)
+                        if model.startswith("mlx:"):
+                            mlx_name = model[4:]  # strip "mlx:" prefix
+                            future = pool.submit(mlx_generate, mlx_name, prompt, temp)
                         else:
                             future = pool.submit(ollama_generate, model, prompt, temp)
                         futures[future] = topic
