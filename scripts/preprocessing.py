@@ -8,6 +8,10 @@ from config import (
     DATA_DIR,
     GESETZE_DIR,
     OPENLEGALDATA_DIR,
+    HARSHILDARJI_DIR,
+    RII_DIR,
+    FOBBE_DIR,
+    LEGAL_COMMONS_DIR,
     AI_GENERATED_DIR,
     PROCESSED_DIR,
     TEST_SPLIT,
@@ -60,8 +64,88 @@ def extract_human_openlegaldata() -> list[dict]:
         conn.close()
     return texts
 
+def extract_human_openlegaldata_hf(limit: int | None = None) -> list[dict]:
+    cache_path = HARSHILDARJI_DIR / "hf_dataset"
+    texts = []
+    if cache_path.exists():
+        from datasets import load_from_disk
+        try:
+            dataset = load_from_disk(str(cache_path))
+            narrative_fields = ["tatbestand", "entscheidungsgruende"]
+            for i, sample in enumerate(dataset):
+                if limit and i >= limit:
+                    break
+                parts = []
+                for field in narrative_fields:
+                    chunks = sample.get(field) or []
+                    for c in chunks:
+                        c = c.strip()
+                        if c:
+                            parts.append(c)
+                text = " ".join(parts)
+                if len(text) >= 100:
+                    texts.append({"text": text, "label": 0, "source": "openlegaldata_hf"})
+        except Exception as e:
+            logger.warning(f"Error loading openlegaldata_hf dataset: {e}")
+    return texts
 
 
+def extract_human_rii(limit: int | None = None) -> list[dict]:
+    cache_path = RII_DIR / "judgements.jsonl"
+    texts = []
+    if cache_path.exists():
+        with open(cache_path) as f:
+            for line in f:
+                if limit and len(texts) >= limit:
+                    break
+                try:
+                    row = json.loads(line)
+                    text = row.get("text", "")
+                    if len(text) >= 100:
+                        texts.append({"text": text, "label": 0, "source": "rii"})
+                except json.JSONDecodeError:
+                    continue
+    return texts
+
+
+def extract_human_fobbe() -> list[dict]:
+    texts = []
+    cache_dir = FOBBE_DIR / "cache_sentences"
+    if not cache_dir.exists():
+        logger.warning("Fobbe cache_sentences not found, run presplit_cache.py first")
+        return texts
+    for cache_file in sorted(cache_dir.glob("*.jsonl")):
+        with open(cache_file) as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                    text = row.get("text", "")
+                    source = row.get("source", f"fobbe_{cache_file.stem}")
+                    if len(text) >= 20:
+                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True})
+                except json.JSONDecodeError:
+                    continue
+    return texts
+
+
+def extract_human_legal_commons() -> list[dict]:
+    texts = []
+    cache_dir = LEGAL_COMMONS_DIR / "cache_sentences"
+    if not cache_dir.exists():
+        logger.warning("Legal Commons cache_sentences not found, run presplit_cache.py first")
+        return texts
+    for cache_file in sorted(cache_dir.glob("*.jsonl")):
+        with open(cache_file) as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                    text = row.get("text", "")
+                    source = row.get("source", "legal_commons")
+                    if len(text) >= 20:
+                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True})
+                except json.JSONDecodeError:
+                    continue
+    return texts
 
 
 def extract_ai_texts() -> list[dict]:
@@ -95,16 +179,35 @@ def deduplicate(records: list[dict]) -> list[dict]:
     return unique
 
 
-def sentence_split_records(records: list[dict]) -> list[dict]:
+def sentence_split_records(records: list[dict], batch_size: int = 256) -> list[dict]:
+    already_split = []
+    to_split = []
+    for r in records:
+        if r.pop("pre_split", False):
+            already_split.append(r)
+        else:
+            to_split.append(r)
+    if not to_split:
+        return already_split
+    logger.info(f"Sentence splitting {len(to_split)} records with spaCy...")
+    from utils.nlp_utils import get_nlp
+    nlp = get_nlp()
+    texts_with_records = [(r["text"], r) for r in to_split]
     split_records = []
-    for rec in tqdm(records, desc="Sentence splitting"):
-        sentences = sentence_segment(rec["text"])
-        for s in sentences:
-            split_records.append({**rec, "text": s})
-    return split_records
+    from tqdm import tqdm
+    for doc, record in tqdm(
+        nlp.pipe(texts_with_records, batch_size=batch_size, as_tuples=True),
+        total=len(to_split),
+        desc="Sentence splitting",
+    ):
+        for sent in doc.sents:
+            s = sent.text.strip()
+            if len(s) >= 20:
+                split_records.append({**record, "text": s})
+    return split_records + already_split
 
 
-def build_dataset(use_openlegaldata: bool = False):
+def build_dataset(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     human_records = []
@@ -116,8 +219,26 @@ def build_dataset(use_openlegaldata: bool = False):
         logger.info("Extracting human texts from OpenLegalData...")
         human_records.extend(extract_human_openlegaldata())
         logger.info(f"  OpenLegalData: {len(human_records)} paragraphs cumulative")
-    else:
-        logger.info("Skipping OpenLegalData (use --openlegaldata flag to enable)")
+
+    if use_openlegaldata_hf:
+        logger.info("Extracting human texts from openlegaldata_hf (harshildarji)...")
+        human_records.extend(extract_human_openlegaldata_hf())
+        logger.info(f"  openlegaldata_hf: {len(human_records)} paragraphs cumulative")
+
+    if use_rii:
+        logger.info("Extracting human texts from Rechtsprechung-im-Internet...")
+        human_records.extend(extract_human_rii())
+        logger.info(f"  RII: {len(human_records)} paragraphs cumulative")
+
+    if use_fobbe:
+        logger.info("Extracting human texts from Fobbe datasets...")
+        human_records.extend(extract_human_fobbe())
+        logger.info(f"  Fobbe: {len(human_records)} paragraphs cumulative")
+
+    if use_legal_commons:
+        logger.info("Extracting human texts from Legal Commons...")
+        human_records.extend(extract_human_legal_commons())
+        logger.info(f"  Legal Commons: {len(human_records)} paragraphs cumulative")
 
     logger.info(f"Total human paragraphs: {len(human_records)}")
 
