@@ -104,9 +104,9 @@ def mine(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, us
 
 
 @stage
-def generate_ai(models: list[str] | None = None):
+def generate_ai(models: list[str] | None = None, temps: list[float] | None = None):
     from scripts.generate_ai import generate_ai_corpus
-    generate_ai_corpus(models)
+    generate_ai_corpus(models, temps)
 
 
 @stage
@@ -208,6 +208,8 @@ def main():
     parser.add_argument("--generate", action="store_true", help="Generate AI text corpus")
     parser.add_argument("--models", nargs="*", default=None,
                         help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
+    parser.add_argument("--temps", nargs="*", type=float, default=None,
+                        help="Temperatures to use (e.g. --temps 0.1 0.3 0.7)")
     parser.add_argument("--list-models", action="store_true",
                         help="List available generation models")
     parser.add_argument("--preprocess", action="store_true", help="Build dataset")
@@ -236,7 +238,7 @@ def main():
     if args.mine:
         mine(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
     if args.generate:
-        generate_ai(args.models)
+        generate_ai(args.models, args.temps)
     if args.preprocess:
         preprocess(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
     if args.train:
@@ -250,7 +252,7 @@ def main():
         logger.info("Starting full pipeline...")
         setup_environment()
         mine(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
-        generate_ai(args.models)
+        generate_ai(args.models, args.temps)
         preprocess(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
         train()
         evaluate()

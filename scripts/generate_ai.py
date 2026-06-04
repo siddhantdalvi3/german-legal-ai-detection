@@ -179,7 +179,7 @@ def load_checkpoint(path: Path) -> int:
     return count
 
 
-def generate_ai_corpus(models: list[str] | None = None):
+def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | None = None):
     AI_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     if models is None:
@@ -223,6 +223,9 @@ def generate_ai_corpus(models: list[str] | None = None):
         logger.info(f"Pulling model: {model}")
         subprocess.run(["ollama", "pull", model], capture_output=True, timeout=600)
 
+    active_temps = temps if temps is not None else TEMPERATURES
+    logger.info(f"Temperatures: {active_temps}")
+
     topics = load_topics()
     total_sentences = 0
     target = SENTENCES_PER_COMBINATION
@@ -238,7 +241,7 @@ def generate_ai_corpus(models: list[str] | None = None):
         else:
             concurrency = 4  # small models: qwen2.5:7b, mistral
 
-        for temp in TEMPERATURES:
+        for temp in active_temps:
             model_key = model.replace("/", "_").replace(":", "_")
             ckpt_path = get_checkpoint_path(model_key, temp)
             done_count = load_checkpoint(ckpt_path)
