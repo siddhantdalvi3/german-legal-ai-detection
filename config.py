@@ -31,6 +31,10 @@ MLRUNS_DIR = PROJECT_ROOT / "mlruns"
 
 GESETZE_DIR = DATA_DIR / "gesetze_im_internet"
 OPENLEGALDATA_DIR = DATA_DIR / "openlegaldata"
+OPENLEGALDATA_HF_DIR = DATA_DIR / "openlegaldata_hf"
+RII_DIR = DATA_DIR / "rii"
+FOBBE_DIR = DATA_DIR / "fobbe"
+LEGAL_COMMONS_DIR = DATA_DIR / "legal_commons"
 AI_GENERATED_DIR = DATA_DIR / "ai_generated"
 
 GESETZE_TOC_URL = "https://www.gesetze-im-internet.de/gii-toc.xml"
@@ -40,7 +44,7 @@ AVAILABLE_MODELS = {
     "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
     "qwen3": {"type": "ollama", "name": "qwen3:14b", "desc": "Qwen 3 14B"},
     "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
-    "gemma4": {"type": "ollama", "name": "gemma4", "desc": "Gemma 4 15B"},
+    "gemma4": {"type": "ollama", "name": "gemma4:12b", "desc": "Gemma 4 12B"},
     "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
     "llama3.1": {"type": "ollama", "name": "llama3.1:8b", "desc": "Llama 3.1 8B"},
     "deepseek": {"type": "ollama", "name": "deepseek-r1:7b", "desc": "DeepSeek R1 7B"},
@@ -51,25 +55,25 @@ AVAILABLE_MODELS = {
         "desc": "MLX Mistral 7B Instruct 4bit",
     },
     "mlx_gemma4": {
-        "type": "mlx_vlm",
-        "name": "mlx-community/gemma-4-31b-it-4bit",
-        "desc": "MLX Gemma 4 31b Instruct 4bit (VLM)",
+        "type": "mlx",
+        "name": "jedisct1/gemma-4-12B-it-txt-mlx-8bit",
+        "desc": "MLX Gemma 4 12B Instruct 8bit (text-only)",
     },
 }
 
 OLLAMA_MODELS = [m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "ollama"]
 DEFAULT_GENERATION_MODELS = list(OLLAMA_MODELS)
 MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
-MLX_VLM_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm")
+MLX_VLM_MODEL = next((m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm"), None)
 
 TEMPERATURES = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
-SENTENCES_PER_COMBINATION = 2000
-AI_TARGET = 4_500
+SENTENCES_PER_COMBINATION = 20_000
+AI_TARGET = 1_320_000
 
 HUMAN_TARGET = 500_000
 DATASET_TARGET = 1_000_000
 
-SPACY_MODEL = "de_core_news_lg"
+SPACY_MODEL = "de_core_news_sm"
 BERT_MODEL = "deepset/gbert-base"
 BERT_MAX_LENGTH = 256
 
