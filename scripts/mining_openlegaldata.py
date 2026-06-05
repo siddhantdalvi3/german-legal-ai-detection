@@ -15,10 +15,9 @@ def cache_valid() -> bool:
         from datasets import load_from_disk
         load_from_disk(str(HF_DATASET_CACHE))
         return True
-    except Exception:
-        import shutil
-        logger.warning(f"Corrupt cache found, deleting and re-downloading")
-        shutil.rmtree(HF_DATASET_CACHE)
+    except Exception as e:
+        logger.warning(f"Cannot load OpenLegalData cache: {e}")
+        logger.warning(f"Delete {HF_DATASET_CACHE} manually and re-run to re-download")
         return False
 
 
