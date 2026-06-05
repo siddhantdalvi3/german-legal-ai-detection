@@ -8,7 +8,6 @@ from config import (
     DATA_DIR,
     GESETZE_DIR,
     OPENLEGALDATA_DIR,
-    HARSHILDARJI_DIR,
     RII_DIR,
     FOBBE_DIR,
     LEGAL_COMMONS_DIR,
@@ -63,32 +62,6 @@ def extract_human_openlegaldata() -> list[dict]:
             logger.warning("OpenLegalData DB has no 'cases' table or different schema")
         conn.close()
     return texts
-
-def extract_human_openlegaldata_hf(limit: int | None = None) -> list[dict]:
-    cache_path = HARSHILDARJI_DIR / "hf_dataset"
-    texts = []
-    if cache_path.exists():
-        from datasets import load_from_disk
-        try:
-            dataset = load_from_disk(str(cache_path))
-            narrative_fields = ["tatbestand", "entscheidungsgruende"]
-            for i, sample in enumerate(dataset):
-                if limit and i >= limit:
-                    break
-                parts = []
-                for field in narrative_fields:
-                    chunks = sample.get(field) or []
-                    for c in chunks:
-                        c = c.strip()
-                        if c:
-                            parts.append(c)
-                text = " ".join(parts)
-                if len(text) >= 100:
-                    texts.append({"text": text, "label": 0, "source": "openlegaldata_hf"})
-        except Exception as e:
-            logger.warning(f"Error loading openlegaldata_hf dataset: {e}")
-    return texts
-
 
 def extract_human_rii(limit: int | None = None) -> list[dict]:
     cache_path = RII_DIR / "judgements.jsonl"
@@ -207,7 +180,7 @@ def sentence_split_records(records: list[dict], batch_size: int = 256) -> list[d
     return split_records + already_split
 
 
-def build_dataset(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
+def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     human_records = []
@@ -219,11 +192,6 @@ def build_dataset(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = 
         logger.info("Extracting human texts from OpenLegalData...")
         human_records.extend(extract_human_openlegaldata())
         logger.info(f"  OpenLegalData: {len(human_records)} paragraphs cumulative")
-
-    if use_openlegaldata_hf:
-        logger.info("Extracting human texts from openlegaldata_hf (harshildarji)...")
-        human_records.extend(extract_human_openlegaldata_hf())
-        logger.info(f"  openlegaldata_hf: {len(human_records)} paragraphs cumulative")
 
     if use_rii:
         logger.info("Extracting human texts from Rechtsprechung-im-Internet...")

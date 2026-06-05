@@ -60,7 +60,7 @@ def setup_environment():
 
 
 @stage
-def mine(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False):
+def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False):
     from scripts.mining import Miner
     miner = Miner()
     miner.mine_gesetze_im_internet()
@@ -71,13 +71,6 @@ def mine(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, us
             mine_openlegaldata()
         except Exception as e:
             logger.warning(f"OpenLegalData mining failed (optional): {e}")
-
-    if use_openlegaldata_hf:
-        from scripts.mining_openlegaldata_hf import mine_openlegaldata_hf
-        try:
-            mine_openlegaldata_hf()
-        except Exception as e:
-            logger.warning(f"openlegaldata_hf mining failed: {e}")
 
     if use_rii:
         from scripts.mining_rii import mine_rii
@@ -110,9 +103,9 @@ def generate_ai(models: list[str] | None = None, temps: list[float] | None = Non
 
 
 @stage
-def preprocess(use_openlegaldata: bool = False, use_openlegaldata_hf: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
+def preprocess(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
     from scripts.preprocessing import build_dataset
-    build_dataset(use_openlegaldata=use_openlegaldata, use_openlegaldata_hf=use_openlegaldata_hf, use_rii=use_rii, use_fobbe=use_fobbe, use_legal_commons=use_legal_commons)
+    build_dataset(use_openlegaldata=use_openlegaldata, use_rii=use_rii, use_fobbe=use_fobbe, use_legal_commons=use_legal_commons)
 
 
 @stage
@@ -198,7 +191,6 @@ def main():
     parser.add_argument("--setup", action="store_true", help="Check environment")
     parser.add_argument("--mine", action="store_true", help="Mine human text sources (Gesetze-im-Internet only)")
     parser.add_argument("--openlegaldata", action="store_true", help="Include OpenLegalData (ODbL) in mining/preprocessing")
-    parser.add_argument("--openlegaldata-hf", action="store_true", help="Include harshildarji/openlegaldata (MIT) HF dataset in mining/preprocessing")
     parser.add_argument("--rii", action="store_true", help="Include Rechtsprechung-im-Internet (gov open data) in mining/preprocessing")
     parser.add_argument("--fobbe", nargs="*", default=None,
                         help="Include Fobbe datasets (CC0) in mining/preprocessing. "
@@ -236,11 +228,11 @@ def main():
     if args.setup:
         setup_environment()
     if args.mine:
-        mine(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
+        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
     if args.generate:
         generate_ai(args.models, args.temps)
     if args.preprocess:
-        preprocess(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
+        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
     if args.train:
         train()
     if args.evaluate:
@@ -251,9 +243,9 @@ def main():
     if args.all:
         logger.info("Starting full pipeline...")
         setup_environment()
-        mine(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
+        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
         generate_ai(args.models, args.temps)
-        preprocess(use_openlegaldata=args.openlegaldata, use_openlegaldata_hf=args.openlegaldata_hf, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
+        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
         train()
         evaluate()
 
@@ -264,7 +256,7 @@ def main():
     if not any([args.setup, args.mine, args.generate, args.preprocess,
                 args.train, args.evaluate, args.serve, args.all, args.list_models,
                 args.predict is not None, has_input,
-                args.openlegaldata, args.openlegaldata_hf, args.rii, args.fobbe is not None, args.legal_commons]):
+                args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons]):
         parser.print_help()
 
 

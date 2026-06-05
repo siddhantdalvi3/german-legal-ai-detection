@@ -31,7 +31,6 @@ MLRUNS_DIR = PROJECT_ROOT / "mlruns"
 
 GESETZE_DIR = DATA_DIR / "gesetze_im_internet"
 OPENLEGALDATA_DIR = DATA_DIR / "openlegaldata"
-OPENLEGALDATA_HF_DIR = DATA_DIR / "openlegaldata_hf"
 RII_DIR = DATA_DIR / "rii"
 FOBBE_DIR = DATA_DIR / "fobbe"
 LEGAL_COMMONS_DIR = DATA_DIR / "legal_commons"
