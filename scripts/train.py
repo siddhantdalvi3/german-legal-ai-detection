@@ -18,7 +18,7 @@ def load_jsonl(path):
     return texts, labels
 
 
-def train_all():
+def train_all(one_class: bool = False):
     train_path = PROCESSED_DIR / "train.jsonl"
     test_path = PROCESSED_DIR / "test.jsonl"
 
@@ -28,6 +28,40 @@ def train_all():
 
     logger.info("Loading training data...")
     texts, labels = load_jsonl(train_path)
+
+    if one_class:
+        human_mask = [l == 0 for l in labels]
+        texts_human = [t for t, m in zip(texts, human_mask) if m]
+        texts_ai = [t for t, m in zip(texts, human_mask) if not m]
+        logger.info(f"One-class mode: {len(texts_human)} human, {len(texts_ai)} AI (AI only for validation)")
+
+        split = int(len(texts_human) * 0.9)
+        texts_train = texts_human[:split]
+        texts_val_human = texts_human[split:]
+        texts_val = texts_val_human + texts_ai
+        labels_val = [0] * len(texts_val_human) + [1] * len(texts_ai)
+
+        logger.info(f"Train (human only): {len(texts_train)} sentences, Val (human+AI): {len(texts_val)} sentences")
+
+        from scripts.models.oneclass import train_oneclass_svm, train_isolation_forest
+
+        logger.info("=" * 50)
+        logger.info("Training One-Class SVM...")
+        logger.info("=" * 50)
+        svm_result = train_oneclass_svm(texts_train, texts_val, labels_val)
+
+        logger.info("=" * 50)
+        logger.info("Training Isolation Forest...")
+        logger.info("=" * 50)
+        if_result = train_isolation_forest(texts_train, texts_val, labels_val)
+
+        logger.info("=" * 50)
+        logger.info("One-class training complete!")
+        logger.info("=" * 50)
+        logger.info(f"One-Class SVM run:     {svm_result[1]}")
+        logger.info(f"Isolation Forest run:  {if_result[1]}")
+        logger.info("=" * 50)
+        return
 
     split = int(len(texts) * 0.9)
     texts_train, labels_train = texts[:split], labels[:split]

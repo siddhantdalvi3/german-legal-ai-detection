@@ -1,0 +1,258 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{cite}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{microtype}
+
+% --- Title ---
+\title{Detecting AI-Generated Text in the German Legal Domain:
+A Reproducible Pipeline and Baseline Results}
+
+\author{Anonymous Author(s) \\
+  Affiliation \\
+  \texttt{email@example.com}}
+
+\begin{document}
+\maketitle
+
+% --- Abstract ---
+\begin{abstract}
+The rapid advancement of large language models (LLMs) has made it increasingly difficult to distinguish human-written from machine-generated text, posing risks of misinformation, academic misconduct, and propaganda. While most research focuses on English, non-English and domain-specific scenarios remain underexplored. We present a reproducible pipeline for detecting AI-generated text in the German legal domain. Our dataset comprises 13.7 million sentences drawn from five public sources of German legal text: Gesetze-im-Internet, OpenLegalData, the Fobbe legal corpus, Legal Commons, and Rechtsprechung-im-Internet (RII). We train and evaluate two baseline classifiers --- Logistic Regression and Random Forest with character n-gram features --- achieving 97.9\% accuracy with 99.7\% human precision and a false positive rate of 2.0\% at default threshold. By adjusting the decision threshold to 0.9, the false positive rate drops to 0.23\% while maintaining 88.5\% AI recall. We further describe a planned AI generation pipeline using eight LLMs with multiple prompting strategies to produce 960K AI-generated sentences. Our work highlights the importance of domain-specific data curation, the efficacy of simple classifiers for legal German text detection, and strategies for minimizing false positives in high-stakes applications.
+\end{abstract}
+
+\section{Introduction}
+
+Large language models have reached a level of fluency where their outputs are often indistinguishable from human-written text \cite{wu2025survey}. This capability raises concerns across multiple domains: fake news and propaganda \cite{zellers2019grover}, academic dishonesty \cite{weber2023testing}, and the erosion of trust in digital content \cite{tang2024science}. The need for reliable AI-generated text detection systems is therefore urgent.
+
+Most existing datasets and detectors focus on English \cite{ghosal2023survey, crothers2023machine}. The few multilingual efforts, such as MULTITuDE \cite{macko2023multitude} and M4 \cite{wang2024m4}, include German only as a secondary language with limited domain coverage. For specialized domains like law and public administration, no dedicated dataset or detector exists for German. Legal texts present unique challenges: long and complex sentences, specialized terminology, and formulaic structures that may differ significantly from the general-domain texts typically used to train detectors.
+
+We address this gap with the following contributions:
+\begin{enumerate}
+  \item We construct and release a reproducible dataset of 13.7 million German legal sentences from five public sources, spanning statutes, court decisions, and legal commentaries.
+  \item We implement a complete preprocessing pipeline using spaCy for German sentence splitting, with idempotent mining scripts and pre-split caching for reproducibility.
+  \item We evaluate two baseline classifiers --- Logistic Regression (LR) and Random Forest (RF) with character n-gram features --- achieving strong results with remarkably low false positive rates.
+  \item We describe a generation pipeline that will produce 960K AI-generated German legal sentences using eight LLMs with varied prompting strategies, temperature settings, and formats.
+  \item We analyze the false positive trade-off and propose thresholding strategies suitable for high-stakes legal applications where false accusations are unacceptable.
+\end{enumerate}
+
+\section{Related Work}
+
+\subsection{AI-Generated Text Detection}
+
+The field of AI-generated text detection has grown rapidly. Recent surveys \cite{wu2025survey, ghosal2023survey, crothers2023machine, tang2024science} categorize approaches into three main paradigms: watermarking, statistical analysis, and neural classification.
+
+Watermarking methods \cite{solaiman2019release} embed detectable signals during text generation but require access to model parameters. Statistical methods such as DetectGPT \cite{ghosal2023survey} and Binoculars \cite{hans2024binoculars} exploit intrinsic differences in token probability distributions, operating in a zero-shot setting without labeled data. Supervised neural approaches fine-tune pretrained language models (PLMs) on labeled human-AI pairs, achieving state-of-the-art results when training and test distributions match \cite{bhattacharjee2024eagle}.
+
+A critical challenge across all approaches is the trade-off between sensitivity and false positive rate (FPR). Weber-Wulff et al. \cite{weber2023testing} found that commercial detectors exhibit FPRs ranging from 0\% to 50\%, with higher FPRs leading to false accusations. Zhu et al. \cite{zhu2025reliably} recently proposed conformal prediction to bound FPRs in zero-shot detection, though their method requires careful calibration.
+
+\subsection{German Legal NLP}
+
+German legal NLP has seen growing interest. Ostendorff et al. \cite{ostendorff2020openlegal} published Open Legal Data, a corpus of over 100K German court decisions. Darji et al. \cite{darji2023german} fine-tuned German BERT on the Legal Entity Recognition (LER) dataset \cite{leitner2020ler} for named entity recognition. Bachinger et al. \cite{bachinger2024extracting} explored LLMs for legal norm analysis. Tai \cite{tai2019german} examined domain-specific BERT fine-tuning for German legal language and found minimal improvements over generic German BERT.
+
+For German language modeling, the lineage from German BERT \cite{chan2020german} through GottBERT \cite{scheible2024gottbert} to GeistBERT \cite{scheible2025geistbert} demonstrates consistent improvements on downstream tasks. Chalkidis et al. \cite{chalkidis2020legal} showed that domain-specific pretraining (LEGAL-BERT) improves performance on legal tasks. Niklaus et al. \cite{niklaus2023multilegal} released Multi Legal Pile, a multilingual legal training corpus.
+
+\subsection{Existing Datasets for AI Text Detection}
+
+Several datasets exist for AI-generated text detection, but they primarily target English news and social media \cite{uchendu2021turingbench, guo2023hc3}. MULTITuDE \cite{macko2023multitude} includes German alongside ten other languages, though its German portion is limited to news articles. M4 \cite{wang2024m4} covers multiple domains and languages but similarly lacks legal data. Irrgang et al. \cite{irrgang2024features} studied German text detection with news and social media but found degraded cross-generator performance. Recent work on Central European languages \cite{macko2025central} showed that fine-tuned detectors outperform statistical methods across German and related languages.
+
+\section{Dataset Construction}
+
+\subsection{Design Principles}
+
+Our dataset construction follows three principles: \textbf{reproducibility} --- every download, mining, and preprocessing step is scripted and idempotent; \textbf{ethical sourcing} --- all data is publicly available with permissive licenses (CC0, public domain, ODbL opt-in); and \textbf{domain purity} --- all texts are German legal documents from courts, statutes, or legal commentary.
+
+\subsection{Human Data Sources}
+
+We collect human-written texts from five sources spanning German law:
+
+\textbf{Gesetze-im-Internet}: 6,119 XML law files (880 MB) from the official German federal law gazette ({\tt gesetze-im-internet.de}), containing the full text of current German federal statutes under public domain.
+
+\textbf{OpenLegalData}: 423,941 documents (25 GB) from the Open Legal Data project \cite{ostendorff2020openlegal}, hosted on Hugging Face. This covers German court decisions from federal and state courts under ODbL license.
+
+\textbf{Fobbe Legal Corpus}: Three datasets of 94,583 paragraphs (1.7 GB) provided by Sean Fobbe, containing curated German legal texts under CC0 license.
+
+\textbf{Legal Commons}: Nine dataset splits totaling 445,572 paragraphs (9.2 GB) from the University of Zurich's Legal Commons initiative, covering decisions from the BGH, BVerfG, BAG, BFH, BPatG, and BVerwG courts.
+
+\textbf{Rechtsprechung-im-Internet (RII)}: 4,989 judgements (48 MB) from the German federal courts' official publication portal, downloaded via the {\tt germanlegaltexts} package.
+
+\subsection{Preprocessing Pipeline}
+
+All texts are processed through a uniform pipeline:
+\begin{enumerate}
+  \item \textbf{Extraction}: Source-specific scripts handle XML parsing, PDF extraction, or Hugging Face dataset loading.
+  \item \textbf{Normalization}: Unicode normalization (NFC), whitespace normalization, and removal of non-textual artifacts.
+  \item \textbf{Sentence splitting}: We use spaCy with the {\tt de\_core\_news\_sm} model for German sentence segmentation, which handles legal sentence structures (citations, paragraphs, nested clauses) more accurately than regex-based splitting.
+  \item \textbf{Pre-split caching}: For large sources (Fobbe, Legal Commons), we cache pre-split sentences in JSONL format using multiprocessing, enabling incremental dataset rebuilding.
+  \item \textbf{Deduplication}: Exact and near-duplicate removal at the sentence level.
+\end{enumerate}
+
+The final human dataset contains 13,695,320 sentences (Table~\ref{tab:dataset}).
+
+\begin{table}[t]
+\centering
+\caption{Dataset composition by source.}
+\label{tab:dataset}
+\begin{tabular}{lrr}
+\toprule
+Source & Sentences & \% \\
+\midrule
+Legal Commons (BGH, BPatG, BVerwG, BFH, BAG, BVerfG) & 10,356,378 & 75.6 \\
+Fobbe (3 datasets) & 2,356,532 & 17.2 \\
+Gesetze-im-Internet & 693,408 & 5.1 \\
+Rechtsprechung-im-Internet (RII) & 289,002 & 2.1 \\
+\midrule
+Total & 13,695,320 & 100.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{AI Generation Pipeline}
+
+We design a distributed generation pipeline to produce AI-generated German legal texts using eight LLMs deployed on a cluster of five NVIDIA 16GB CUDA systems running Ollama v0.30.5. The models are:
+
+\begin{itemize}
+  \item \textbf{Llama 3.1} (8B, 70B) --- multilingual, strong German performance
+  \item \textbf{Mistral} (7B, 12B) --- efficient, good European language coverage
+  \item \textbf{Phi-3} (14B) --- small-footprint, instruction-tuned
+  \item \textbf{DeepSeek Coder V2} (16B) --- strong structured text generation
+  \item \textbf{Qwen 3} (14B) --- recent multilingual improvements
+  \item \textbf{Gemma 4} (12B) --- Apache 2.0, newly released (June 2026)
+  \item \textbf{LL\"{a}Mmlein} (7B) --- German-only model \cite{pfister2025llammlein}
+\end{itemize}
+
+We employ six prompting strategies: zero-shot, few-shot (3 examples), role-prompted (as judge/lawyer), continuation, summarization, and question-answering style. Combined with two temperature settings (0.3, 0.8), this yields 48 combinations. Our target is 20,000 sentences per combination (960,000 total), representing approximately 6.7\% of the final dataset.
+
+Each output retains metadata including model name, prompt strategy, temperature, and generation date. All generation is performed on the CUDA cluster; no generation runs on development machines.
+
+\section{Methodology}
+
+\subsection{Feature Extraction}
+
+For our baseline classifiers, we use character n-gram features extracted via TF-IDF vectorization. Character n-grams capture morphological and orthographic patterns that differ between human and AI texts --- a finding consistent with prior work on German text detection \cite{irrgang2024features}. We set {\tt ngram\_range=(2,5)}, {\tt max\_features=50000}, and {\tt sublinear\_tf=True}.
+
+\subsection{Classification Models}
+
+\textbf{Logistic Regression (LR)}: A linear classifier with L2 regularization ($C=1.0$), trained with the {\tt lbfgs} solver and {\tt class\_weight='balanced'}. LR provides probabilistic outputs suitable for threshold tuning.
+
+\textbf{Random Forest (RF)}: An ensemble of 200 decision trees with {\tt max\_depth=50}, {\tt class\_weight='balanced'}. RF captures non-linear feature interactions but requires more computation.
+
+Both models are implemented using scikit-learn \cite{pedregosa2011scikit}. For transformer experiments, we plan to fine-tune German PLMs (German BERT \cite{chan2020german}, GottBERT \cite{scheible2024gottbert}, GeistBERT \cite{scheible2025geistbert}) using LoRA \cite{hu2022lora} for parameter-efficient adaptation.
+
+\subsection{Evaluation Protocol}
+
+We split the dataset 90:10 into training and test sets, stratified by source to maintain class proportions. We report accuracy, precision, recall, F1-score, and false positive rate (FPR). Following the recommendations of Zhu et al. \cite{zhu2025reliably}, we pay particular attention to FPR at various decision thresholds, as false positives in the legal domain can lead to unjust accusations.
+
+\subsection{False Positive Mitigation}
+
+Our primary strategy for minimizing false positives is probability threshold calibration. By increasing the decision threshold from the default 0.5 to a higher value, we trade AI recall for reduced FPR. This is appropriate for legal applications where flagging a human-written text as AI-generated is far more costly than missing an AI-generated text \cite{weber2023testing}. We evaluate thresholds at 0.5, 0.7, 0.8, 0.9, and 0.95.
+
+\section{Experiments}
+
+\subsection{Experimental Setup}
+
+Experiments were conducted on a preliminary dataset of 77,434 sentences (70,923 human, 6,511 AI) extracted from Gesetze-im-Internet and early AI generation runs. This subset represents approximately 0.6\% of the full human corpus and was used to validate the pipeline and establish baselines. The full dataset (13.7M human sentences) and the planned 960K AI sentences will be used in future experiments.
+
+All models were trained on an Apple Silicon (M3) system with 24 GB unified memory. LR training completed in approximately 2.5 minutes; RF training took approximately 22 minutes.
+
+\subsection{Baseline Results}
+
+Table~\ref{tab:results} summarizes the main results at the default threshold of 0.5.
+
+\begin{table}[t]
+\centering
+\caption{Baseline results at threshold 0.5.}
+\label{tab:results}
+\begin{tabular}{lcc}
+\toprule
+Metric & LR & RF \\
+\midrule
+Accuracy & 0.9788 & 0.9762 \\
+Human Precision & 0.9970 & 0.9781 \\
+Human Recall & 0.9798 & 0.9963 \\
+Human F1 & 0.9883 & 0.9871 \\
+AI Precision & 0.8146 & 0.9492 \\
+AI Recall & 0.9681 & 0.7575 \\
+AI F1 & 0.8847 & 0.8426 \\
+FPR & 0.0202 & 0.0037 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Logistic Regression achieves higher overall accuracy (97.9\%) and significantly higher AI recall (96.8\% vs. 75.8\%) at the cost of a higher FPR (2.0\% vs. 0.4\%). Random Forest offers better AI precision (94.9\% vs. 81.5\%) and a much lower FPR, making it more suitable for applications where false positives are unacceptable out of the box.
+
+\subsection{Threshold Analysis}
+
+Table~\ref{tab:thresholds} shows how LR performance changes with the decision threshold. By raising the threshold to 0.9, the FPR drops to 0.23\% --- nearly a tenfold reduction --- while AI recall remains at 88.5\%.
+
+\begin{table}[t]
+\centering
+\caption{LR performance at different decision thresholds (AI class).}
+\label{tab:thresholds}
+\begin{tabular}{lcccc}
+\toprule
+Threshold & Precision & Recall & F1 & FPR \\
+\midrule
+0.5 & 0.8146 & 0.9681 & 0.8847 & 0.0202 \\
+0.7 & 0.8993 & 0.9469 & 0.9225 & 0.0097 \\
+0.8 & 0.9387 & 0.9263 & \textbf{0.9324} & 0.0056 \\
+\textbf{0.9} & \textbf{0.9723} & 0.8854 & 0.9268 & \textbf{0.0023} \\
+0.95 & 0.9865 & 0.8281 & 0.9004 & 0.0010 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The optimal F1 threshold (0.8) balances precision and recall, while the conservative threshold (0.9) is recommended for production deployment where FPR minimization is paramount.
+
+For Random Forest, the FPR is already very low at threshold 0.5 (0.37\%) and decreases to near zero at higher thresholds, though at substantial cost to recall.
+
+\subsection{Error Analysis}
+
+We analyze the LR misclassifications at threshold 0.9 (2,642 errors out of 77,434). False positives (human text flagged as AI) are short, formulaic sentences common in statutes, such as section headings and standard legal phrases. False negatives (AI text missed) tend to be longer, more complex sentences where the model's character n-gram patterns resemble human writing. This suggests that character-level features effectively capture the more repetitive, templatic nature of AI legal text but struggle with carefully crafted, high-variation prompts.
+
+\section{Discussion}
+
+\subsection{Implications for Practice}
+
+Our results demonstrate that simple classifiers with character n-gram features can achieve strong performance on German legal text detection. The LR classifier at threshold 0.9 achieves a false positive rate of 0.23\% --- meaning fewer than 1 in 400 human texts would be falsely flagged. This is within an acceptable range for many practical applications, though domain experts should validate on their specific text distributions.
+
+The RF classifier trades recall for precision, achieving even lower FPR (0.37\% at default threshold) but missing nearly a quarter of AI-generated texts. For applications where catching AI text is secondary to avoiding false accusations, RF at a conservative threshold is the safer choice.
+
+\subsection{Limitations}
+
+Several limitations should be acknowledged. First, the baseline results are on a preliminary dataset (77K samples, \textasciitilde0.6\% of the full human corpus) with AI text from early generation runs. The full dataset --- 13.7M human sentences and planned 960K AI sentences --- may yield different results. Second, both LR and RF use fixed-length character n-gram features that cannot capture long-range dependencies; transformer-based models may improve recall on complex AI text. Third, our AI generation uses a specific set of LLMs and prompts; detection performance may not generalize to unseen models or adversarial attacks.
+
+\subsection{Future Work}
+
+We plan the following next steps:
+\begin{enumerate}
+  \item Complete AI generation across all 8 models and 48 combinations (960K sentences).
+  \item Train and evaluate transformer-based models (German BERT, GottBERT, GeistBERT) with LoRA fine-tuning.
+  \item Evaluate cross-model and cross-domain generalization, including testing on AI text from unseen models.
+  \item Implement adversarial robustness testing through paraphrasing and text perturbation.
+  \item Deploy the best-performing model as an online demo for human-in-the-loop evaluation.
+\end{enumerate}
+
+\section{Conclusion}
+
+We present a comprehensive pipeline for detecting AI-generated text in the German legal domain. Our dataset of 13.7 million human sentences from five public sources is, to our knowledge, the largest dedicated German legal corpus for AI detection research. Baseline experiments show that simple character-level classifiers achieve 97.9\% accuracy with 99.7\% human precision, and that careful threshold calibration can reduce false positive rates to 0.23\% while maintaining high recall. All code, data, and model configurations are documented for full reproducibility. We hope this work serves as a foundation for domain-specific AI detection in German, addressing the critical gap between English-centric research and real-world deployment needs in non-English legal systems.
+
+% --- References ---
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -1,6 +1,9 @@
 import json
 import random
+import re
+from datetime import date
 from pathlib import Path
+from xml.etree import ElementTree
 
 from tqdm import tqdm
 
@@ -15,6 +18,7 @@ from config import (
     PROCESSED_DIR,
     TEST_SPLIT,
     RANDOM_SEED,
+    MAX_DATE,
 )
 from utils.mining import logger, find_xml_files
 from utils.nlp_utils import (
@@ -23,37 +27,73 @@ from utils.nlp_utils import (
     is_boilerplate,
 )
 
+MAX_DATE_PARSE = date.fromisoformat(MAX_DATE)
+
+
+def _parse_gesetze_date(xml_content: str) -> date | None:
+    match = re.search(r'<ausfertigung-datum[^>]*>(\d{4}-\d{2}-\d{2})</ausfertigung-datum>', xml_content)
+    if match:
+        return date.fromisoformat(match.group(1))
+    root = ElementTree.fromstring(xml_content)
+    norm = root.find("norm")
+    if norm is not None:
+        meta = norm.find("metadaten")
+        if meta is not None:
+            el = meta.find("ausfertigung-datum")
+            if el is not None and el.text:
+                try:
+                    return date.fromisoformat(el.text.strip())
+                except ValueError:
+                    pass
+    return None
+
 random.seed(RANDOM_SEED)
 
 
 def extract_human_gesetze() -> list[dict]:
     texts = []
+    excluded = 0
     for xml_file in find_xml_files(GESETZE_DIR):
         try:
             content = xml_file.read_text(encoding="utf-8", errors="replace")
+            doc_date = _parse_gesetze_date(content)
+            if doc_date is not None and doc_date > MAX_DATE_PARSE:
+                excluded += 1
+                continue
             paragraphs = extract_text_from_xml(content)
             for p in paragraphs:
                 if not is_boilerplate(p):
                     texts.append({"text": p, "label": 0, "source": "gesetze"})
         except Exception as e:
             logger.warning(f"Error parsing {xml_file}: {e}")
+    if excluded:
+        logger.info(f"  Excluded {excluded} Gesetze documents dated after {MAX_DATE}")
     return texts
 
 
 def extract_human_openlegaldata() -> list[dict]:
     db_path = OPENLEGALDATA_DIR / "data.db"
     texts = []
+    excluded = 0
     if db_path.exists():
         import sqlite3
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT text FROM cases WHERE language='de' AND text IS NOT NULL "
+                "SELECT text, date FROM cases WHERE language='de' AND text IS NOT NULL "
                 "AND length(text) > 100 ORDER BY date DESC LIMIT 50000"
             )
-            for (text,) in cursor.fetchall():
-                import re
+            for row in cursor.fetchall():
+                text, doc_date = row
+                if doc_date:
+                    try:
+                        d = date.fromisoformat(str(doc_date)[:10])
+                        if d > MAX_DATE_PARSE:
+                            excluded += 1
+                            continue
+                    except ValueError:
+                        pass
                 clean = re.sub(r"<[^>]+>", " ", text)
                 clean = re.sub(r"\s+", " ", clean).strip()
                 if len(clean) >= 100:
@@ -61,6 +101,8 @@ def extract_human_openlegaldata() -> list[dict]:
         except sqlite3.OperationalError:
             logger.warning("OpenLegalData DB has no 'cases' table or different schema")
         conn.close()
+    if excluded:
+        logger.info(f"  Excluded {excluded} OpenLegalData documents dated after {MAX_DATE}")
     return texts
 
 def extract_human_rii(limit: int | None = None) -> list[dict]:

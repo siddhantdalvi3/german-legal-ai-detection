@@ -21,6 +21,29 @@ def load_jsonl(path):
     return texts, labels
 
 
+def evaluate_oneclass(pipeline, texts, labels,
+                      experiment_name: str, run_id: str = None):
+    mlflow.set_experiment(experiment_name)
+    y_pred_raw = pipeline.predict(texts)
+    y_scores_raw = pipeline.decision_function(texts)
+
+    y_prob = 1 - (y_scores_raw - y_scores_raw.min()) / (y_scores_raw.max() - y_scores_raw.min() + 1e-10)
+    y_pred = np.where(y_pred_raw == 1, 0, 1)
+
+    results = _compute_metrics(y_prob, labels, prefix="test")
+    logger.info(f"\nOne-Class {experiment_name} — Test Results:")
+    _print_results(results)
+
+    tn, fp, fn, tp = confusion_matrix(labels, y_pred).ravel()
+    logger.info(f"  Default-threshold Precision (AI): {tp/(tp+fp):.4f}" if (tp+fp) > 0 else "  Default-threshold Precision: N/A")
+    logger.info(f"  Default-threshold FPR:            {fp/(fp+tn):.4f}" if (fp+tn) > 0 else "  Default-threshold FPR: N/A")
+
+    with mlflow.start_run(run_id=run_id) if run_id else mlflow.start_run():
+        mlflow.log_metrics({f"test_{k}": v for k, v in results.items()})
+
+    return results
+
+
 def evaluate_baseline(pipeline, texts, labels,
                       experiment_name: str, run_id: str = None):
     mlflow.set_experiment(experiment_name)

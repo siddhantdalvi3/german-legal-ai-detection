@@ -109,17 +109,17 @@ def preprocess(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe
 
 
 @stage
-def train():
+def train(one_class: bool = False):
     from scripts.train import train_all
-    train_all()
+    train_all(one_class=one_class)
 
 
 @stage
-def evaluate():
+def evaluate(one_class: bool = False):
     import json
     from config import PROCESSED_DIR
     from scripts.evaluate import (
-        load_jsonl, evaluate_baseline
+        load_jsonl, evaluate_baseline, evaluate_oneclass
     )
     from scripts.models.baseline import train_logistic_regression, train_random_forest
 
@@ -130,8 +130,33 @@ def evaluate():
         logger.error("No test set found. Run --preprocess first.")
         return
 
-    texts_train, labels_train = load_jsonl(train_path)
     texts_test, labels_test = load_jsonl(test_path)
+
+    if one_class:
+        texts_train, labels_train = load_jsonl(train_path)
+        human_mask = [l == 0 for l in labels_train]
+        texts_train_human = [t for t, m in zip(texts_train, human_mask) if m]
+        split = int(len(texts_train_human) * 0.9)
+        texts_val_human = texts_train_human[split:]
+        texts_val = texts_val_human + [t for t, m in zip(texts_train, human_mask) if not m][:5000]
+        labels_val = [0] * len(texts_val_human) + [1] * len([t for t, m in zip(texts_train, human_mask) if not m][:5000])
+
+        from scripts.models.oneclass import train_oneclass_svm, train_isolation_forest
+
+        logger.info("Retraining One-Class SVM for evaluation...")
+        svm_model, svm_id = train_oneclass_svm(texts_train_human, texts_val, labels_val)
+        evaluate_oneclass(svm_model, texts_test, labels_test,
+                          experiment_name="oneclass_svm", run_id=svm_id)
+
+        logger.info("Retraining Isolation Forest for evaluation...")
+        if_model, if_id = train_isolation_forest(texts_train_human, texts_val, labels_val)
+        evaluate_oneclass(if_model, texts_test, labels_test,
+                          experiment_name="oneclass_if", run_id=if_id)
+
+        logger.info("One-class evaluation complete!")
+        return
+
+    texts_train, labels_train = load_jsonl(train_path)
 
     split = int(len(texts_train) * 0.9)
     texts_val, labels_val = texts_train[split:], labels_train[split:]
@@ -206,6 +231,7 @@ def main():
                         help="List available generation models")
     parser.add_argument("--preprocess", action="store_true", help="Build dataset")
     parser.add_argument("--train", action="store_true", help="Train all models")
+    parser.add_argument("--one-class", action="store_true", help="Train one-class models (OC-SVM, Isolation Forest) on human data only")
     parser.add_argument("--evaluate", action="store_true", help="Evaluate all models")
     parser.add_argument("--predict", nargs="?", const=True, help="Make predictions")
     parser.add_argument("--serve", action="store_true", help="Start API server")
@@ -234,9 +260,9 @@ def main():
     if args.preprocess:
         preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
     if args.train:
-        train()
+        train(one_class=args.one_class)
     if args.evaluate:
-        evaluate()
+        evaluate(one_class=args.one_class)
     if args.serve:
         serve()
 
@@ -246,8 +272,8 @@ def main():
         mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
         generate_ai(args.models, args.temps)
         preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
-        train()
-        evaluate()
+        train(one_class=args.one_class)
+        evaluate(one_class=args.one_class)
 
     has_input = args.text or args.file
     if args.predict is not None or has_input:
@@ -256,7 +282,8 @@ def main():
     if not any([args.setup, args.mine, args.generate, args.preprocess,
                 args.train, args.evaluate, args.serve, args.all, args.list_models,
                 args.predict is not None, has_input,
-                args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons]):
+                args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons,
+                args.one_class]):
         parser.print_help()
 
 
