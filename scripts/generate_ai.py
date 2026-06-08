@@ -68,22 +68,35 @@ def load_topics() -> list[str]:
         return TOPICS_CACHE
 
     logger.info("Extracting topics from Gesetze XMLs (first run)...")
-    from bs4 import BeautifulSoup
+    from xml.etree import ElementTree
     from utils.mining import find_xml_files
 
     headings = set()
     for xml_file in find_xml_files(GESETZE_DIR):
         try:
-            soup = BeautifulSoup(xml_file.read_bytes(), "xml")
-            for norm in soup.find_all("norm"):
-                enbez = norm.find("enbez")
-                titel = norm.find("titel")
-                if not enbez and not titel:
+            root = ElementTree.parse(xml_file).getroot()
+            for norm in root.iter("norm"):
+                meta = norm.find("metadaten")
+                if meta is None:
                     continue
-                parts = [e.text.strip() for e in [enbez, titel] if e and e.text.strip()]
+                enbez = meta.find("enbez")
+                titel = meta.find("titel")
+                if enbez is None and titel is None:
+                    continue
+                parts = []
+                for el in (enbez, titel):
+                    if el is not None and el.text:
+                        parts.append(el.text.strip())
                 heading = " ".join(parts)
-                text_el = norm.find("text")
-                if heading and text_el and len(text_el.text.strip()) >= 50:
+                textdaten = norm.find("textdaten")
+                has_text = False
+                if textdaten is not None:
+                    for t in textdaten.iter("text"):
+                        full = "".join(t.itertext()).strip()
+                        if len(full) >= 50:
+                            has_text = True
+                            break
+                if heading and has_text:
                     headings.add(heading)
         except Exception:
             continue
