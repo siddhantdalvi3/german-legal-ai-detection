@@ -34,6 +34,8 @@ OPENLEGALDATA_DIR = DATA_DIR / "openlegaldata"
 RII_DIR = DATA_DIR / "rii"
 FOBBE_DIR = DATA_DIR / "fobbe"
 LEGAL_COMMONS_DIR = DATA_DIR / "legal_commons"
+DIP_DIR = DATA_DIR / "dip_bundestag"
+GESP_DIR = DATA_DIR / "gesp"
 AI_GENERATED_DIR = DATA_DIR / "ai_generated"
 
 GESETZE_TOC_URL = "https://www.gesetze-im-internet.de/gii-toc.xml"
@@ -65,9 +67,9 @@ DEFAULT_GENERATION_MODELS = list(OLLAMA_MODELS)
 MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
 MLX_VLM_MODEL = next((m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm"), None)
 
-TEMPERATURES = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
-SENTENCES_PER_COMBINATION = 20_000
-AI_TARGET = 1_320_000
+TEMPERATURES = [0.3, 0.7]
+SENTENCES_PER_COMBINATION = 10_000
+AI_TARGET = 450_000
 
 HUMAN_TARGET = 500_000
 DATASET_TARGET = 1_000_000

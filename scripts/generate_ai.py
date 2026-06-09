@@ -62,7 +62,7 @@ def load_topics() -> list[str]:
 
     topics_path = GESETZE_DIR / "topics.jsonl"
     if topics_path.exists():
-        lines = [l.strip() for l in topics_path.read_text().splitlines() if l.strip()]
+        lines = [l.strip() for l in topics_path.read_text(encoding="utf-8").splitlines() if l.strip()]
         TOPICS_CACHE = [json.loads(l)["heading"] for l in lines]
         logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from cache")
         return TOPICS_CACHE
@@ -273,7 +273,7 @@ def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | Non
             pbar = tqdm(total=target, initial=sentences_in_batch, desc=f"{model_key} t={temp}")
             topic_offset = sentences_in_batch
 
-            with open(ckpt_path, "a") as f, ThreadPoolExecutor(max_workers=concurrency) as pool:
+            with open(ckpt_path, "a", encoding="utf-8") as f, ThreadPoolExecutor(max_workers=concurrency) as pool:
                 futures = {}
                 while sentences_in_batch < target:
                     # Submit up to concurrency prompts at once
