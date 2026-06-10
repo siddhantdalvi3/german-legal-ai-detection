@@ -6,92 +6,76 @@ Detect AI-generated German legal and administrative texts with a focus on minimi
 
 ```bash
 # Setup:
-uv sync                                         # Install Python deps
-python main.py --setup                          # Check environment
+uv sync                    # Install Python deps
+uv run python main.py --setup       # Check environment
 
 # Pipeline:
-python main.py --mine                           # Download Gesetze-im-Internet
-python main.py --mine --openlegaldata           # + OpenLegalData (optional, needs HF auth)
-python main.py --generate                       # Generate AI texts (all models)
-python main.py --generate --models qwen2.5      # Selective generation
-python main.py --preprocess                     # Build dataset (Gesetze + AI)
-python main.py --train                          # Train baseline models (LR + RF)
-python main.py --evaluate                       # Evaluate + MLflow logging
+uv run python main.py --mine --fobbe --legal-commons --rii
+uv run python main.py --generate --models qwen2.5 --temps 0.3 0.7
+uv run python main.py --generate --models mistral --temps 0.3 0.7
+uv run python main.py --generate --models gemma4 --temps 0.3
+uv run python main.py --generate --models gemma4 --temps 0.7
+uv run python main.py --preprocess --fobbe --legal-commons --rii
+uv run python main.py --train
+uv run python main.py --evaluate
 
 # Inference:
-python main.py --predict --text "Die Deutsche Bundesbank wird ermächtigt..."
-python main.py --predict --model rf --threshold 0.9 --text "..."
+uv run python main.py --predict --text "Die Deutsche Bundesbank wird ermächtigt..."
 
 # Interactive mode:
-python main.py --predict
+uv run python main.py --predict
 
 # API server:
-python main.py --serve
+uv run python main.py --serve
 ```
-
-## Key Results
-
-| Model | Threshold | Precision | Recall | FPR | Hard Set FP (0 FPs ideal) |
-|---|---|---|---|---|---|
-| Logistic Regression | 0.9 | **97.2%** | 88.5% | 0.23% | 19/152 |
-| **Random Forest** | **0.9** | **99.9%** | 11.9% | **0.00%** | **0/152** |
-
-**RF @ thr=0.9** is the production recommendation for false-positive minimization.
 
 ## Project Structure
 
 ```
 ├── main.py                    # Pipeline orchestrator
 ├── config.py                  # Central configuration
-├── download_all.py            # Idempotent download of all assets
 ├── scripts/
-│   ├── mining.py              # Gesetze-im-Internet miner
-│   ├── mining_openlegaldata.py# OpenLegalData (HF datasets)
-│   ├── generate_ai.py         # Ollama + MLX generation (checkpointed)
+│   ├── mining*.py             # Per-source miners (Gesetze, Fobbe, Legal Commons, RII, DIP, GESP)
+│   ├── generate_ai.py         # Ollama generation (checkpointed)
 │   ├── preprocessing.py       # Clean, segment, deduplicate
+│   ├── presplit_cache.py      # spaCy pre-split for large sources
 │   ├── train.py               # Training orchestrator
 │   ├── evaluate.py            # Metrics + MLflow
 │   ├── predict.py             # CLI inference
 │   ├── serve.py               # FastAPI server
 │   └── models/
+│       ├── oneclass.py        # OneClassSVM + IsolationForest
 │       ├── features.py        # TF-IDF + statistical features
 │       ├── baseline.py        # Logistic Regression + Random Forest
 │       └── transformer.py     # gbert-base + LoRA
-├── utils/
-│   ├── mining.py              # Data storage + logging utilities
-│   └── nlp_utils.py           # spaCy, XML cleaning, sentence splitting
 ├── docs/
 │   ├── architecture.md        # Pipeline + MLflow structure
 │   ├── dataset.md             # Sources, preprocessing, current state
 │   ├── evaluation.md          # Metrics, thresholds, results
 │   └── lit_review/            # 24 papers across 3 topics
-├── tests/
-│   └── hard_set.jsonl         # 152 human legal sentences for FP validation
 ├── data/                      # Raw and processed data (gitignored)
-└── mlruns/                    # MLflow experiment data (gitignored)
+└── paper/                     # Conference paper (LaTeX)
 ```
 
 ## Dataset
 
-- **Human**: 6,119 Gesetze-im-Internet XMLs → 707,714 sentences
-- **AI**: 9,783 paragraphs from qwen2.5:7b (6,546), gemma3:12b (1,500), MLX Mistral (1,500), gemma4 (partial) → 66,628 sentences after preprocessing
-- **Total**: 774,342 sentences (91.4% Human, 8.6% AI)
-- **Average sentence length**: 25 words
-- **OpenLegalData**: Optional (`--openlegaldata` flag)
+- **Human**: 13.7M sentences from Legal Commons (76.9%), Fobbe (17.5%), Gesetze (5.1%), RII (2.1%)
+- **AI (planned)**: ~450K sentences from qwen2.5:7b, mistral, gemma4:12b at temps 0.3 and 0.7
+- **AI ratio**: ~3.2% (evaluation only; one-class methods train on human-only data)
+- **All data pre-2022** (`MAX_DATE = "2021-12-31"`)
 
 ## Requirements
 
-- Python >= 3.12 (tested on 3.14, `/opt/homebrew/bin/python3.14`)
-- Apple Silicon (M3 Pro, 18 GB RAM) for MPS GPU acceleration
-- Ollama for AI text generation (`ollama pull qwen2.5 gemma3 gemma4`)
+- Python >= 3.12 (tested on 3.14)
+- NVIDIA GPU 16GB+ for AI generation (RTX 4080)
+- Ollama for AI text generation (`ollama pull qwen2.5:7b mistral gemma4:12b`)
 - ~55 GB disk for full dataset + models
 
 ## Key Design Decisions
 
-- **500 paragraphs per model×temp combo**: Final choice after real generation rates measured (~10.6 s/sent). See `docs/dataset.md` for full sizing analysis.
-- **Precision-focused**: threshold calibration sweep at 0.5–0.95.
-- **Hard set**: 152 curated human legal sentences for FP validation.
-- **Models**: Logistic Regression + Random Forest (sklearn Pipelines), gbert-base + LoRA configured but not viable on MPS (~75 hrs estimated).
-- **RF @ thr=0.9 achieves 0 false positives** on the hard set.
-- **Experiment tracking**: MLflow with local file store (`mlruns/`).
-- **gbert-base tokenizer/model**: Requires `BertTokenizer` directly (not `AutoTokenizer`) due to missing fast tokenizer serialization; requires `BertConfig`/`BertForSequenceClassification` (not `Auto*`) due to missing `model_type` field.
+- **False positives must be minimized** — threshold calibrated for ≥0.9, precision-focused
+- **One-class training** — OneClassSVM + IsolationForest trained on human data only
+- **All generation on CUDA** — single RTX 4080, 4-night schedule (15.5h/night)
+- **spaCy sm > lg** — faster, accurate enough for German legal sentence splitting
+- **Pre-2022 data** — ensures human data predates widespread LLM use
+- **Experiment tracking**: MLflow with local file store (`mlruns/`)

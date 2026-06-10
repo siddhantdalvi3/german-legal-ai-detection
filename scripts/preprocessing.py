@@ -14,6 +14,8 @@ from config import (
     RII_DIR,
     FOBBE_DIR,
     LEGAL_COMMONS_DIR,
+    DIP_DIR,
+    GESP_DIR,
     AI_GENERATED_DIR,
     PROCESSED_DIR,
     TEST_SPLIT,
@@ -143,6 +145,41 @@ def extract_human_fobbe() -> list[dict]:
     return texts
 
 
+def extract_human_dip() -> list[dict]:
+    texts = []
+    for name in ("drucksache_text", "plenarprotokoll_text"):
+        cache = DIP_DIR / f"{name}.jsonl"
+        if not cache.exists():
+            continue
+        with open(cache) as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                    text = row.get("text", "")
+                    if len(text) >= 100:
+                        texts.append({"text": text, "label": 0, "source": f"dip_{name}"})
+                except json.JSONDecodeError:
+                    continue
+    return texts
+
+
+def extract_human_gesp() -> list[dict]:
+    texts = []
+    cache = GESP_DIR / "texts.jsonl"
+    if not cache.exists():
+        return texts
+    with open(cache) as f:
+        for line in f:
+            try:
+                row = json.loads(line)
+                text = row.get("text", "")
+                if len(text) >= 100:
+                    texts.append({"text": text, "label": 0, "source": f"gesp_{row.get('state','unknown')}"})
+            except json.JSONDecodeError:
+                continue
+    return texts
+
+
 def extract_human_legal_commons() -> list[dict]:
     texts = []
     cache_dir = LEGAL_COMMONS_DIR / "cache_sentences"
@@ -222,7 +259,7 @@ def sentence_split_records(records: list[dict], batch_size: int = 256) -> list[d
     return split_records + already_split
 
 
-def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
+def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False):
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     human_records = []
@@ -249,6 +286,16 @@ def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fo
         logger.info("Extracting human texts from Legal Commons...")
         human_records.extend(extract_human_legal_commons())
         logger.info(f"  Legal Commons: {len(human_records)} paragraphs cumulative")
+
+    if use_dip:
+        logger.info("Extracting human texts from DIP Bundestag...")
+        human_records.extend(extract_human_dip())
+        logger.info(f"  DIP: {len(human_records)} paragraphs cumulative")
+
+    if use_gesp:
+        logger.info("Extracting human texts from GESP state courts...")
+        human_records.extend(extract_human_gesp())
+        logger.info(f"  GESP: {len(human_records)} paragraphs cumulative")
 
     logger.info(f"Total human paragraphs: {len(human_records)}")
 

@@ -21,4 +21,8 @@ paper/*.blg
 paper/*.out
 paper/*.toc
 paper/*.spl
+PLAN.md
+docs/
+skills-lock.json
+.junie/
 

@@ -3,7 +3,7 @@
 Download all project assets (idempotent — skips anything already cached).
 
 Usage:
-    uv run python download_all.py             # everything (~55 GB)
+    uv run python download_all.py             # everything
     uv run python download_all.py --deps      # Python deps + spaCy model
     uv run python download_all.py --models    # AI generation models (Ollama)
     uv run python download_all.py --data      # all human text sources
@@ -43,8 +43,7 @@ def _ollama_model_pulled(model: str) -> bool:
 
 
 def download_deps():
-    print("\n=== Python Dependencies (~2 GB with torch) ===")
-    venv = PROJECT_ROOT / ".venv"
+    print("\n=== Python Dependencies ===")
     if (venv / "bin" / "python").exists():
         r = subprocess.run(
             [str(venv / "bin" / "python"), "-c", "import mlx_lm"],
@@ -70,15 +69,10 @@ def download_deps():
 
 
 def download_models():
-    print("\n=== Ollama Models (~40 GB total) ===")
+    print("\n=== Ollama Models (~24 GB total) ===")
     models = [
         ("qwen2.5:7b", "4.7 GB"),
-        ("gemma3:12b", "8 GB"),
-        ("gemma4", "15 GB"),
         ("mistral", "4.1 GB"),
-        ("llama3.1:8b", "4.7 GB"),
-        ("llama3.3:70b", "43 GB"),
-        ("mixtral:8x7b", "26 GB"),
         ("gemma4:12b", "15 GB"),
     ]
     for model, size in models:
@@ -94,34 +88,17 @@ def download_data():
 
     print("\n--- Gesetze-im-Internet + Fobbe + Legal Commons ---")
     run(
-        [VENV_PYTHON, "main.py", "--mine", "--openlegaldata", "--fobbe", "bverwg", "bpatg", "bgh_strafsachen", "--legal-commons"],
-        "mine Gesetze, OpenLegalData, Fobbe, Legal Commons",
+        [VENV_PYTHON, "main.py", "--mine", "--legal-commons", "--fobbe"],
+        "mine Gesetze, Fobbe, Legal Commons",
         timeout=3600,
     )
 
     print("\n--- Rechtsprechung-im-Internet ---")
-    r = subprocess.run(
-        [VENV_PYTHON, "-c", "import germanlegaltexts"],
-        capture_output=True,
-    )
-    if r.returncode != 0:
-        print("  Installing germanlegaltexts for RII downloader...")
-        run([VENV_PYTHON, "-m", "pip", "install", "germanlegaltexts"], "pip install germanlegaltexts")
     run(
         [VENV_PYTHON, "main.py", "--mine", "--rii"],
         "mine RII (~5000 judgements)",
         timeout=3600,
     )
-
-    print()
-    print("  Data sources summary:")
-    run([VENV_PYTHON, "main.py", "--list-models"], "list available data sources")
-
-    print("\n--- OpenLegalData (official HF, ODbL) ---")
-    print("  NOTE: Requires HF login + accepting dataset terms:")
-    print("    huggingface-cli login")
-    print("    Accept: https://huggingface.co/datasets/openlegaldata/court-decisions-germany")
-    print("  Then re-run: python main.py --mine --openlegaldata")
 
 
 def main():
@@ -129,16 +106,16 @@ def main():
         description="Download all project assets (idempotent)"
     )
     parser.add_argument("--deps", action="store_true", help="Python deps + spaCy")
-    parser.add_argument("--models", action="store_true", help="Ollama models (~40 GB)")
+    parser.add_argument("--models", action="store_true", help="Ollama models (~24 GB)")
     parser.add_argument("--data", action="store_true", help="Human text sources (~17 GB)")
     args = parser.parse_args()
 
     any_specific = args.deps or args.models or args.data
 
     if not any_specific:
-        print("Total download estimate: ~55 GB")
+        print("Total download estimate: ~43 GB")
         print("  Python deps + spaCy:  ~2.5 GB")
-        print("  Ollama models:        ~40 GB")
+        print("  Ollama models:        ~24 GB")
         print("  Human data:           ~17 GB  (idempotent, skips cached)")
         print()
 

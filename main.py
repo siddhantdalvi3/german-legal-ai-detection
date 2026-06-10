@@ -60,7 +60,7 @@ def setup_environment():
 
 
 @stage
-def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False):
+def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False):
     from scripts.mining import Miner
     miner = Miner()
     miner.mine_gesetze_im_internet()
@@ -93,6 +93,20 @@ def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets:
         except Exception as e:
             logger.warning(f"Legal Commons mining failed: {e}")
 
+    if use_dip:
+        from scripts.mining_dip_bundestag import mine_dip_bundestag
+        try:
+            mine_dip_bundestag()
+        except Exception as e:
+            logger.warning(f"DIP Bundestag mining failed: {e}")
+
+    if use_gesp:
+        from scripts.mining_gesp import mine_gesp
+        try:
+            mine_gesp()
+        except Exception as e:
+            logger.warning(f"GESP mining failed: {e}")
+
     logger.info("All mining complete!")
 
 
@@ -103,9 +117,9 @@ def generate_ai(models: list[str] | None = None, temps: list[float] | None = Non
 
 
 @stage
-def preprocess(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False):
+def preprocess(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe: bool = False, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False):
     from scripts.preprocessing import build_dataset
-    build_dataset(use_openlegaldata=use_openlegaldata, use_rii=use_rii, use_fobbe=use_fobbe, use_legal_commons=use_legal_commons)
+    build_dataset(use_openlegaldata=use_openlegaldata, use_rii=use_rii, use_fobbe=use_fobbe, use_legal_commons=use_legal_commons, use_dip=use_dip, use_gesp=use_gesp)
 
 
 @stage
@@ -222,6 +236,10 @@ def main():
                              "Specify names: bverwg bpatg bgh_strafsachen, or all if omitted")
     parser.add_argument("--legal-commons", action="store_true",
                         help="Include CUI03/german-commons Legal Commons in mining/preprocessing")
+    parser.add_argument("--dip", action="store_true",
+                        help="Include DIP Bundestag (Drucksachen + Plenarprotokolle) in mining/preprocessing")
+    parser.add_argument("--gesp", action="store_true",
+                        help="Include state court decisions via gesp in mining/preprocessing")
     parser.add_argument("--generate", action="store_true", help="Generate AI text corpus")
     parser.add_argument("--models", nargs="*", default=None,
                         help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
@@ -254,11 +272,11 @@ def main():
     if args.setup:
         setup_environment()
     if args.mine:
-        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
+        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
     if args.generate:
         generate_ai(args.models, args.temps)
     if args.preprocess:
-        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
+        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
     if args.train:
         train(one_class=args.one_class)
     if args.evaluate:
@@ -269,9 +287,9 @@ def main():
     if args.all:
         logger.info("Starting full pipeline...")
         setup_environment()
-        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons)
+        mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
         generate_ai(args.models, args.temps)
-        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons)
+        preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
         train(one_class=args.one_class)
         evaluate(one_class=args.one_class)
 
@@ -283,7 +301,7 @@ def main():
                 args.train, args.evaluate, args.serve, args.all, args.list_models,
                 args.predict is not None, has_input,
                 args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons,
-                args.one_class]):
+                args.dip, args.gesp, args.one_class]):
         parser.print_help()
 
 
