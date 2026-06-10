@@ -3,7 +3,7 @@ import logging
 import re
 import subprocess
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from config import DATA_DIR
@@ -61,9 +61,9 @@ def _run_gesp_state(state_code: str, state_name: str) -> int:
         "-w", "0.5",
     ]
     logger.info(f"  [{state_code}] Mining {state_name}...")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=False, text=True)
     if result.returncode != 0:
-        logger.warning(f"  [{state_code}] gesp returned {result.returncode}: {result.stderr[:200]}")
+        logger.warning(f"  [{state_code}] gesp returned {result.returncode}")
         return 0
 
     found = len(list(state_dir.rglob("*.html"))) + len(list(state_dir.rglob("*.xhtml")))
@@ -87,7 +87,7 @@ def run_gesp():
     logger.info(f"Mining {len(STATES)} states in parallel ({MAX_WORKERS} workers)...")
     total = 0
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {}
         for code, name in STATES:
             fut = pool.submit(_run_gesp_state, code, name)
