@@ -20,6 +20,10 @@ HEADERS = {
 }
 
 
+def _cursor_path(doc_type: str) -> Path:
+    return DIP_DIR / f"{doc_type}_cursor.txt"
+
+
 def _api_get(endpoint: str, params: dict | None = None) -> dict | None:
     url = f"{DIP_API_BASE}/{endpoint}"
     p = params or {}
@@ -46,17 +50,23 @@ def _count_lines(path: Path) -> int:
 
 def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
     text_path = DIP_DIR / f"{doc_type}_text.jsonl"
-    total_before = _count_lines(text_path)
+    ckpt_path = _cursor_path(doc_type)
     DIP_DIR.mkdir(parents=True, exist_ok=True)
 
-    if total_before > 0:
-        logger.info(f"  {doc_type} existing: {total_before} texts, skipping")
-        logger.info(f"  Delete {text_path} to re-download from scratch")
-        return
-
-    logger.info(f"  Mining {doc_type} (single-threaded, {DELAY}s delay)...")
+    total_before = _count_lines(text_path)
     cursor = None
+
+    if ckpt_path.exists():
+        cursor = ckpt_path.read_text(encoding="utf-8").strip()
+        logger.info(f"  {doc_type}: resuming from cursor {cursor[:40]}... ({total_before} texts saved)")
+    elif total_before > 0:
+        logger.warning(f"  {doc_type}: {total_before} texts exist but no checkpoint — resuming from page 1 (up to ~500 dupes expected)")
+
+    if not cursor:
+        logger.info(f"  Mining {doc_type} from start (single-threaded, {DELAY}s delay)...")
+
     saved = 0
+    num_found = None
 
     while True:
         params = {"f.datum.end": MAX_DATE, "format": "json"}
@@ -86,18 +96,25 @@ def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
         total_now = total_before + saved
 
         cursor = data.get("cursor")
+        if ckpt_path and cursor:
+            ckpt_path.write_text(cursor, encoding="utf-8")
+        elif not cursor:
+            ckpt_path.unlink(missing_ok=True)
+
         if not cursor or not docs:
             break
 
         if total_now % 500 == 0:
-            num_found = data.get("numFound", 0)
+            num_found = data.get("numFound", num_found) or 0
             logger.info(f"  {doc_type}: {total_now} / {num_found}")
 
         if limit and total_now >= limit:
+            ckpt_path.unlink(missing_ok=True)
             break
 
         time.sleep(DELAY)
 
+    ckpt_path.unlink(missing_ok=True)
     total = _count_lines(text_path)
     logger.info(f"  {doc_type}: {total} texts cached ({saved} new)")
 
