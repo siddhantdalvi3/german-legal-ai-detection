@@ -13,11 +13,11 @@ from config import (
     AI_GENERATED_DIR,
     AVAILABLE_MODELS,
     DEFAULT_GENERATION_MODELS,
-    GESETZE_DIR,
     TEMPERATURES,
     SENTENCES_PER_COMBINATION,
     is_macos,
 )
+from scripts.extract_topics import TOPICS_DIR
 from utils.mining import logger
 
 OLLAMA_API = "http://localhost:11434/api/generate"
@@ -60,73 +60,28 @@ def load_topics() -> list[str]:
     if TOPICS_CACHE is not None:
         return TOPICS_CACHE
 
-    topics_path = GESETZE_DIR / "topics.jsonl"
-    if topics_path.exists():
-        lines = [l.strip() for l in topics_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-        TOPICS_CACHE = [json.loads(l)["heading"] for l in lines]
-        logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from cache")
+    combined_path = TOPICS_DIR / "all_topics.jsonl"
+    if combined_path.exists():
+        lines = [l.strip() for l in combined_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        TOPICS_CACHE = [json.loads(l)["topic"] for l in lines]
+        logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from combined pool ({TOPICS_DIR / 'all_topics.jsonl'})")
         return TOPICS_CACHE
 
-    logger.info("Extracting topics from Gesetze XMLs (first run)...")
-    from xml.etree import ElementTree
-    from utils.mining import find_xml_files
-
-    headings = set()
-    for xml_file in find_xml_files(GESETZE_DIR):
-        try:
-            root = ElementTree.parse(xml_file).getroot()
-            for norm in root.iter("norm"):
-                meta = norm.find("metadaten")
-                if meta is None:
-                    continue
-                enbez = meta.find("enbez")
-                titel = meta.find("titel")
-                if enbez is None and titel is None:
-                    continue
-                parts = []
-                for el in (enbez, titel):
-                    if el is not None and el.text:
-                        parts.append(el.text.strip())
-                heading = " ".join(parts)
-                textdaten = norm.find("textdaten")
-                has_text = False
-                if textdaten is not None:
-                    for t in textdaten.iter("text"):
-                        full = "".join(t.itertext()).strip()
-                        if len(full) >= 50:
-                            has_text = True
-                            break
-                if heading and has_text:
-                    headings.add(heading)
-        except Exception:
-            continue
-
-    # Filter out noisy placeholders and very short headings
-    result = sorted(
-        h for h in headings
-        if "(XXXX)" not in h and len(h) >= 10
-    )
-    with open(topics_path, "w") as f:
-        for h in result:
-            f.write(json.dumps({"heading": h}, ensure_ascii=False) + "\n")
-
-    logger.info(f"Extracted {len(result):,} unique topics")
-    if not result:
-        logger.warning("No topics extracted from Gesetze XMLs. Using fallback list.")
-        result = [
-            "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht",
-            "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB",
-            "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht",
-            "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit",
-            "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB",
-            "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht",
-            "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB",
-            "Die Voraussetzungen der Pfändung von Arbeitseinkommen",
-            "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr",
-            "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung",
-        ]
-    TOPICS_CACHE = result
-    return result
+    logger.info("Combined topics not found. Run `python scripts/extract_topics.py` first.")
+    fallback = [
+        "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht",
+        "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB",
+        "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht",
+        "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit",
+        "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB",
+        "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht",
+        "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB",
+        "Die Voraussetzungen der Pfändung von Arbeitseinkommen",
+        "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr",
+        "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung",
+    ]
+    TOPICS_CACHE = fallback
+    return fallback
 
 
 def get_topic(topics: list[str], idx: int) -> str:

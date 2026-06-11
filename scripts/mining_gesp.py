@@ -38,6 +38,7 @@ STATES = [
 MAX_WORKERS = 8
 MIN_FILES_PER_STATE = 2_000
 MAX_FILES_PER_STATE = 10_000
+UNLIMITED_MAX = 1_000_000
 MONITOR_INTERVAL = 10
 
 
@@ -53,18 +54,19 @@ def _count_state_files(state_dir: Path) -> int:
     return len(list(state_dir.rglob("*.html"))) + len(list(state_dir.rglob("*.xhtml")))
 
 
-def _run_gesp_state(state_code: str, state_name: str) -> int:
+def _run_gesp_state(state_code: str, state_name: str, all_files: bool = False) -> int:
     state_dir = GESP_DIR / "raw" / state_code
     state_dir.mkdir(parents=True, exist_ok=True)
+    cap = UNLIMITED_MAX if all_files else MAX_FILES_PER_STATE
 
     existing = _count_state_files(state_dir)
-    if existing >= MIN_FILES_PER_STATE:
+    if not all_files and existing >= MIN_FILES_PER_STATE:
         logger.info(f"  [{state_code}] {state_name}: {existing} files (>= {MIN_FILES_PER_STATE}), skipping")
         return existing
     if existing > 0:
-        logger.info(f"  [{state_code}] {state_name}: {existing} files, continuing (target {MAX_FILES_PER_STATE})")
+        logger.info(f"  [{state_code}] {state_name}: {existing} files, continuing (target {cap})")
     else:
-        logger.info(f"  [{state_code}] Mining {state_name} (cap {MAX_FILES_PER_STATE} files)...")
+        logger.info(f"  [{state_code}] Mining {state_name} (cap {cap} files)...")
 
     courts_str = ",".join(STATE_COURT_TYPES)
     cmd = [
@@ -82,8 +84,8 @@ def _run_gesp_state(state_code: str, state_name: str) -> int:
             time.sleep(MONITOR_INTERVAL)
             current = _count_state_files(state_dir)
             logger.info(f"  [{state_code}] {current} files so far...")
-            if current >= MAX_FILES_PER_STATE:
-                logger.info(f"  [{state_code}] Reached {MAX_FILES_PER_STATE} files, stopping...")
+            if current >= cap:
+                logger.info(f"  [{state_code}] Reached {cap} files, stopping...")
                 process.terminate()
                 time.sleep(2)
                 if process.poll() is None:
@@ -102,7 +104,7 @@ def _run_gesp_state(state_code: str, state_name: str) -> int:
     return found
 
 
-def run_gesp():
+def run_gesp(all_files: bool = False):
     text_cache = GESP_DIR / "texts.jsonl"
     if text_cache.exists():
         count = sum(1 for _ in open(text_cache))
@@ -115,8 +117,9 @@ def run_gesp():
 
     GESP_DIR.mkdir(parents=True, exist_ok=True)
 
+    cap_str = "unlimited" if all_files else str(MAX_FILES_PER_STATE)
     states_queue = list(STATES)
-    logger.info(f"Mining {len(states_queue)} states ({MAX_WORKERS} workers, cap {MAX_FILES_PER_STATE}/state)...")
+    logger.info(f"Mining {len(states_queue)} states ({MAX_WORKERS} workers, cap {cap_str}/state)...")
     total = 0
     queue_lock = threading.Lock()
 
@@ -129,7 +132,7 @@ def run_gesp():
                         break
                     code, name = states_queue.pop(0)
                 try:
-                    n = _run_gesp_state(code, name)
+                    n = _run_gesp_state(code, name, all_files=all_files)
                     with queue_lock:
                         total += n
                 except Exception as e:
@@ -202,11 +205,11 @@ def _append_jsonl(path: Path, row: dict):
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def mine_gesp():
+def mine_gesp(all_files: bool = False):
     logger.info("=" * 50)
     logger.info("Mining state court decisions via gesp...")
     logger.info("=" * 50)
-    run_gesp()
+    run_gesp(all_files=all_files)
     extract_texts()
     logger.info("GESP mining complete!")
 

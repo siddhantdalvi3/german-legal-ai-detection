@@ -60,7 +60,7 @@ def setup_environment():
 
 
 @stage
-def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False):
+def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False, gesp_all: bool = False):
     from scripts.mining import Miner
 
     has_explicit_sources = any([use_openlegaldata, use_rii, fobbe_datasets is not None, use_legal_commons, use_dip, use_gesp])
@@ -107,7 +107,7 @@ def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets:
     if use_gesp:
         from scripts.mining_gesp import mine_gesp
         try:
-            mine_gesp()
+            mine_gesp(all_files=gesp_all)
         except Exception as e:
             logger.warning(f"GESP mining failed: {e}")
 
@@ -244,6 +244,8 @@ def main():
                         help="Include DIP Bundestag (Drucksachen + Plenarprotokolle) in mining/preprocessing")
     parser.add_argument("--gesp", action="store_true",
                         help="Include state court decisions via gesp in mining/preprocessing")
+    parser.add_argument("--gesp-all", action="store_true",
+                        help="GESP: download all files from all states (no per-state cap)")
     parser.add_argument("--generate", action="store_true", help="Generate AI text corpus")
     parser.add_argument("--models", nargs="*", default=None,
                         help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
