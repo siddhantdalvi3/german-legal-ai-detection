@@ -62,8 +62,12 @@ def setup_environment():
 @stage
 def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets: list[str] | None = None, use_legal_commons: bool = False, use_dip: bool = False, use_gesp: bool = False):
     from scripts.mining import Miner
-    miner = Miner()
-    miner.mine_gesetze_im_internet()
+
+    has_explicit_sources = any([use_openlegaldata, use_rii, fobbe_datasets is not None, use_legal_commons, use_dip, use_gesp])
+
+    if not has_explicit_sources:
+        miner = Miner()
+        miner.mine_gesetze_im_internet()
 
     if use_openlegaldata:
         from scripts.mining_openlegaldata import mine_openlegaldata

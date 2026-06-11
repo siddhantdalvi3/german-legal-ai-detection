@@ -160,12 +160,10 @@ def train_gbert(texts_train, labels_train, texts_val, labels_val,
         })
 
         logger.info("gbert training complete, saving model...")
-        trainer.save_model("./models/gbert_lora_best")
-        tokenizer.save_pretrained("./models/gbert_lora_best")
-        mlflow.transformers.log_model(
-            model, "model",
-            tokenizer=tokenizer,
-        )
+        model_path = "./models/gbert_lora_best"
+        trainer.save_model(model_path)
+        tokenizer.save_pretrained(model_path)
+        mlflow.log_artifacts(model_path, artifact_path="gbert_lora_model")
 
         logger.info(f"gbert model saved. Run ID: {run.info.run_id}")
         return model, tokenizer, run.info.run_id

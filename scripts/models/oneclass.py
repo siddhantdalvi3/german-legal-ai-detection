@@ -57,7 +57,6 @@ def train_oneclass_svm(texts_train, texts_val, y_val,
             "nu": 0.05,
             "kernel": "rbf",
             "gamma": "auto",
-            "random_state": RANDOM_SEED,
         }
         mlflow.log_params({"model_type": "OneClassSVM", **model_params})
 

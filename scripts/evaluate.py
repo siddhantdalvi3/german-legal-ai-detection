@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from config import PROCESSED_DIR, CLASSIFIER_THRESHOLDS
+from config import CLASSIFIER_THRESHOLDS
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,11 @@ def evaluate_oneclass(pipeline, texts, labels,
     logger.info(f"\nOne-Class {experiment_name} — Test Results:")
     _print_results(results)
 
-    tn, fp, fn, tp = confusion_matrix(labels, y_pred).ravel()
+    cm = confusion_matrix(labels, y_pred, labels=[0, 1]).ravel()
+    if len(cm) == 4:
+        tn, fp, fn, tp = cm
+    else:
+        tn = fp = fn = tp = 0
     logger.info(f"  Default-threshold Precision (AI): {tp/(tp+fp):.4f}" if (tp+fp) > 0 else "  Default-threshold Precision: N/A")
     logger.info(f"  Default-threshold FPR:            {fp/(fp+tn):.4f}" if (fp+tn) > 0 else "  Default-threshold FPR: N/A")
 
@@ -95,7 +99,8 @@ def evaluate_hard_set(model_predict_fn, texts, labels,
     y_prob = model_predict_fn(texts)
     y_pred = (y_prob >= threshold).astype(int)
 
-    tn, fp, fn, tp = confusion_matrix(labels, y_pred).ravel()
+    _tn, _fp, _fn, _tp = confusion_matrix(labels, y_pred, labels=[0, 1]).ravel()
+    tn, fp, fn, tp = _tn, _fp, _fn, _tp
 
     logger.info(f"\n{'='*50}")
     logger.info(f"HARD SET EVALUATION (threshold={threshold})")
@@ -114,7 +119,7 @@ def _compute_metrics(y_prob, y_true, prefix: str = ""):
     metrics = {}
     for threshold in CLASSIFIER_THRESHOLDS:
         y_pred = (y_prob >= threshold).astype(int)
-        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = (
