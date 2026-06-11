@@ -18,8 +18,14 @@ def get_nlp():
             _nlp = spacy.load(SPACY_MODEL)
             logger.info(f"Loaded spaCy model: {SPACY_MODEL}")
         except OSError:
-            logger.warning(f"Model {SPACY_MODEL} not found, using blank German")
-            _nlp = German()
+            logger.warning(f"Model {SPACY_MODEL} not found, downloading...")
+            import subprocess, sys
+            subprocess.run(
+                [sys.executable, "-m", "spacy", "download", SPACY_MODEL],
+                check=True, capture_output=True,
+            )
+            _nlp = spacy.load(SPACY_MODEL)
+            logger.info(f"Downloaded and loaded spaCy model: {SPACY_MODEL}")
     return _nlp
 
 
