@@ -1,8 +1,10 @@
 import json
 import random
-from html.parser import HTMLParser
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from xml.etree import ElementTree
+
+from lxml import html as lxml_html
 
 from config import (
     DATA_DIR,
@@ -14,6 +16,7 @@ from config import (
 from utils.mining import logger
 
 TOPICS_DIR = DATA_DIR / "topics"
+_GESP_HTML_WORKERS = 16
 
 random.seed(RANDOM_SEED)
 
@@ -59,50 +62,17 @@ def extract_dip_topics(output_path: Path) -> list[dict]:
     return topics
 
 
-class _GespHtmlParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self._in_titel = False
-        self._in_p = False
-        self._depth = 0
-        self._parts = []
-
-    def handle_starttag(self, tag, attrs):
-        attrs_dict = dict(attrs)
-        if tag == "div" and attrs_dict.get("class") == "docLayoutTitel":
-            self._in_titel = True
-        if self._in_titel and tag == "p":
-            self._in_p = True
-            self._parts = []
-
-    def handle_data(self, data):
-        if self._in_p:
-            self._parts.append(data.strip())
-
-    def handle_entityref(self, name):
-        if self._in_p:
-            import html
-            self._parts.append(html.entities.name2codepoint.get(name, ""))
-
-    def handle_endtag(self, tag):
-        if self._in_titel and tag == "div":
-            self._in_titel = False
-        if self._in_p and tag == "p":
-            self._in_p = False
-
-    def get_topic(self) -> str | None:
-        text = " ".join(p for p in self._parts if p).strip()
+def _extract_gesp_html_topic(filepath: Path) -> str | None:
+    try:
+        tree = lxml_html.fromstring(filepath.read_bytes())
+        titel_divs = tree.xpath('//div[@class="docLayoutTitel"]')
+        if not titel_divs:
+            return None
+        parts = titel_divs[0].xpath('.//dd//p//text()')
+        text = "".join(p.strip() for p in parts if p.strip()).strip()
         if len(text) >= 10:
             return text
         return None
-
-
-def _extract_gesp_html_topic(filepath: Path) -> str | None:
-    try:
-        content = filepath.read_text("utf-8", errors="replace")
-        parser = _GespHtmlParser()
-        parser.feed(content)
-        return parser.get_topic()
     except Exception:
         return None
 
@@ -114,20 +84,29 @@ def extract_gesp_html_topics(output_path: Path) -> list[dict]:
         logger.info("  GESP raw dir not found, skipping")
         return topics
 
-    for state_dir in sorted(raw_dir.iterdir()):
-        if not state_dir.is_dir():
-            continue
-        inner = state_dir / state_dir.name
-        if not inner.exists():
-            continue
-        for fpath in sorted(inner.iterdir()):
-            if fpath.suffix.lower() not in (".html", ".htm"):
-                continue
-            topic = _extract_gesp_html_topic(fpath)
+    html_files = [
+        fpath
+        for state_dir in sorted(raw_dir.iterdir())
+        if state_dir.is_dir()
+        for inner in [state_dir / state_dir.name]
+        if inner.exists()
+        for fpath in sorted(inner.iterdir())
+        if fpath.suffix.lower() in (".html", ".htm")
+    ]
+
+    logger.info(f"  Parsing {len(html_files)} HTML files with {_GESP_HTML_WORKERS} workers...")
+    with ThreadPoolExecutor(max_workers=_GESP_HTML_WORKERS) as pool:
+        fut_to_path = {pool.submit(_extract_gesp_html_topic, fp): fp for fp in html_files}
+        done = 0
+        for future in as_completed(fut_to_path):
+            done += 1
+            topic = future.result()
             if topic:
                 topics.append({"topic": topic, "source": "gesp"})
+            if done % 5000 == 0:
+                logger.info(f"    {done}/{len(html_files)} ({len(topics)} topics found)")
 
-    logger.info(f"  GESP HTML: {len(topics)} topics from HTML files")
+    logger.info(f"  GESP HTML: {len(topics)} topics from {len(html_files)} files")
     with open(output_path, "w") as f:
         for t in topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
