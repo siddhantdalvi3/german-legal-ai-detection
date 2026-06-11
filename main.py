@@ -247,6 +247,8 @@ def main():
                         help="Temperatures to use (e.g. --temps 0.1 0.3 0.7)")
     parser.add_argument("--list-models", action="store_true",
                         help="List available generation models")
+    parser.add_argument("--sources", action="store_true",
+                        help="Show detailed data source report")
     parser.add_argument("--preprocess", action="store_true", help="Build dataset")
     parser.add_argument("--train", action="store_true", help="Train all models")
     parser.add_argument("--one-class", action="store_true", help="Train one-class models (OC-SVM, Isolation Forest) on human data only")
@@ -261,6 +263,11 @@ def main():
     parser.add_argument("--threshold", type=float, default=0.9)
 
     args = parser.parse_args()
+
+    if args.sources:
+        from scripts.report_sources import report_sources
+        report_sources()
+        return
 
     if args.list_models:
         from config import AVAILABLE_MODELS
@@ -299,6 +306,7 @@ def main():
 
     if not any([args.setup, args.mine, args.generate, args.preprocess,
                 args.train, args.evaluate, args.serve, args.all, args.list_models,
+                args.sources,
                 args.predict is not None, has_input,
                 args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons,
                 args.dip, args.gesp, args.one_class]):

@@ -1,8 +1,11 @@
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -32,7 +35,10 @@ STATES = [
     ("sh", "Schleswig-Holstein"),
     ("th", "Thuringia"),
 ]
-MAX_WORKERS = 4
+MAX_WORKERS = 8
+MIN_FILES_PER_STATE = 2_000
+MAX_FILES_PER_STATE = 10_000
+MONITOR_INTERVAL = 10
 
 
 def _check_gesp_installed() -> bool:
@@ -43,14 +49,22 @@ def _check_gesp_installed() -> bool:
         return False
 
 
+def _count_state_files(state_dir: Path) -> int:
+    return len(list(state_dir.rglob("*.html"))) + len(list(state_dir.rglob("*.xhtml")))
+
+
 def _run_gesp_state(state_code: str, state_name: str) -> int:
     state_dir = GESP_DIR / "raw" / state_code
     state_dir.mkdir(parents=True, exist_ok=True)
 
-    existing = len(list(state_dir.rglob("*.html"))) + len(list(state_dir.rglob("*.xhtml")))
-    if existing > 0:
-        logger.info(f"  [{state_code}] {state_name}: {existing} files exist, skipping")
+    existing = _count_state_files(state_dir)
+    if existing >= MIN_FILES_PER_STATE:
+        logger.info(f"  [{state_code}] {state_name}: {existing} files (>= {MIN_FILES_PER_STATE}), skipping")
         return existing
+    if existing > 0:
+        logger.info(f"  [{state_code}] {state_name}: {existing} files, continuing (target {MAX_FILES_PER_STATE})")
+    else:
+        logger.info(f"  [{state_code}] Mining {state_name} (cap {MAX_FILES_PER_STATE} files)...")
 
     courts_str = ",".join(STATE_COURT_TYPES)
     cmd = [
@@ -60,13 +74,30 @@ def _run_gesp_state(state_code: str, state_name: str) -> int:
         "-p", str(state_dir),
         "-w", "0.5",
     ]
-    logger.info(f"  [{state_code}] Mining {state_name}...")
-    result = subprocess.run(cmd, capture_output=False, text=True)
-    if result.returncode != 0:
-        logger.warning(f"  [{state_code}] gesp returned {result.returncode}")
-        return 0
 
-    found = len(list(state_dir.rglob("*.html"))) + len(list(state_dir.rglob("*.xhtml")))
+    process = subprocess.Popen(cmd, stdout=None, stderr=None)
+
+    try:
+        while process.poll() is None:
+            time.sleep(MONITOR_INTERVAL)
+            current = _count_state_files(state_dir)
+            logger.info(f"  [{state_code}] {current} files so far...")
+            if current >= MAX_FILES_PER_STATE:
+                logger.info(f"  [{state_code}] Reached {MAX_FILES_PER_STATE} files, stopping...")
+                process.terminate()
+                time.sleep(2)
+                if process.poll() is None:
+                    process.kill()
+                break
+    except KeyboardInterrupt:
+        logger.warning(f"  [{state_code}] Interrupted, stopping...")
+        process.terminate()
+        process.wait()
+        raise
+
+    process.wait()
+
+    found = _count_state_files(state_dir)
     logger.info(f"  [{state_code}] {state_name}: {found} files")
     return found
 
@@ -84,23 +115,33 @@ def run_gesp():
 
     GESP_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Mining {len(STATES)} states in parallel ({MAX_WORKERS} workers)...")
+    states_queue = list(STATES)
+    logger.info(f"Mining {len(states_queue)} states ({MAX_WORKERS} workers, cap {MAX_FILES_PER_STATE}/state)...")
     total = 0
+    queue_lock = threading.Lock()
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {}
-        for code, name in STATES:
-            fut = pool.submit(_run_gesp_state, code, name)
-            futures[fut] = (code, name)
+        def mine_next():
+            nonlocal total
+            while True:
+                with queue_lock:
+                    if not states_queue:
+                        break
+                    code, name = states_queue.pop(0)
+                try:
+                    n = _run_gesp_state(code, name)
+                    with queue_lock:
+                        total += n
+                except Exception as e:
+                    logger.error(f"  [{code}] Failed: {e}")
 
-        for fut in as_completed(futures):
-            code, name = futures[fut]
+        num_workers = min(MAX_WORKERS, len(states_queue))
+        futures = [pool.submit(mine_next) for _ in range(num_workers)]
+        for f in as_completed(futures):
             try:
-                n = fut.result()
-                total += n
-                logger.info(f"  [{code}] {name}: {n} files")
+                f.result()
             except Exception as e:
-                logger.error(f"  [{code}] Failed: {e}")
+                logger.error(f"Worker failed: {e}")
 
     logger.info(f"GESP download complete: ~{total} files")
 

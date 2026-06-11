@@ -20,10 +20,6 @@ HEADERS = {
 }
 
 
-def _cursor_path(doc_type: str) -> Path:
-    return DIP_DIR / f"{doc_type}_cursor.txt"
-
-
 def _api_get(endpoint: str, params: dict | None = None) -> dict | None:
     url = f"{DIP_API_BASE}/{endpoint}"
     p = params or {}
@@ -48,41 +44,19 @@ def _count_lines(path: Path) -> int:
     return sum(1 for _ in open(path))
 
 
-def _load_existing_ids(path: Path) -> set:
-    if not path.exists():
-        return set()
-    ids = set()
-    for line in open(path, encoding="utf-8"):
-        try:
-            doc = json.loads(line)
-            doc_id = doc.get("id")
-            if doc_id:
-                ids.add(doc_id)
-        except json.JSONDecodeError:
-            continue
-    return ids
-
-
 def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
     text_path = DIP_DIR / f"{doc_type}_text.jsonl"
-    ckpt_path = _cursor_path(doc_type)
     DIP_DIR.mkdir(parents=True, exist_ok=True)
 
     total_before = _count_lines(text_path)
-    existing_ids = _load_existing_ids(text_path) if total_before > 0 else set()
+    if total_before > 0:
+        logger.info(f"  {doc_type} existing: {total_before} texts, skipping")
+        logger.info(f"  Delete {text_path} to re-download from scratch")
+        return
+
+    logger.info(f"  Mining {doc_type} (single-threaded, {DELAY}s delay)...")
     cursor = None
-
-    if ckpt_path.exists():
-        cursor = ckpt_path.read_text(encoding="utf-8").strip()
-        logger.info(f"  {doc_type}: resuming from cursor {cursor[:40]}... ({total_before} texts, {len(existing_ids)} unique IDs)")
-    elif total_before > 0:
-        logger.warning(f"  {doc_type}: {total_before} texts exist but no checkpoint — resuming from page 1, skipping {len(existing_ids)} known IDs")
-
-    if not cursor:
-        logger.info(f"  Mining {doc_type} from start (single-threaded, {DELAY}s delay)...")
-
     saved = 0
-    skipped = 0
     num_found = None
 
     while True:
@@ -98,14 +72,10 @@ def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
 
         docs = data.get("documents", [])
         for d in docs:
-            doc_id = d.get("id")
-            if doc_id and doc_id in existing_ids:
-                skipped += 1
-                continue
             text = d.get("text", "")
             if text and len(text) >= 100:
                 row = {
-                    "id": doc_id,
+                    "id": d.get("id"),
                     "dokumentnummer": d.get("dokumentnummer"),
                     "datum": d.get("datum"),
                     "titel": d.get("titel"),
@@ -115,27 +85,20 @@ def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
                 saved += 1
 
         cursor = data.get("cursor")
-        if cursor:
-            ckpt_path.write_text(cursor, encoding="utf-8")
-
         if not cursor or not docs:
-            ckpt_path.unlink(missing_ok=True)
             break
 
         if saved > 0 and saved % 500 == 0:
             num_found = data.get("numFound", num_found) or 0
-            total_now = total_before + saved
-            logger.info(f"  {doc_type}: {total_now} / {num_found} (skipped {skipped} dupes)")
+            logger.info(f"  {doc_type}: {saved} / {num_found}")
 
         if limit and saved >= limit:
-            ckpt_path.unlink(missing_ok=True)
             break
 
         time.sleep(DELAY)
 
-    ckpt_path.unlink(missing_ok=True)
     total = _count_lines(text_path)
-    logger.info(f"  {doc_type}: {total} texts cached ({saved} new, {skipped} dupes skipped)")
+    logger.info(f"  {doc_type}: {total} texts cached ({saved} new)")
 
 
 def mine_dip_bundestag(limit: int | None = None):
