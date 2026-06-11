@@ -188,8 +188,8 @@ def build_hard_set():
         )
 
     with open(HARD_SET_PATH, "w", encoding="utf-8") as f:
-        for s in sentences:
-            record = {"text": s, "label": 0, "source": "hard_set"}
+        for i, s in enumerate(sentences):
+            record = {"text": s, "label": 0, "source": "hard_set", "group_id": f"hard_set__{i}"}
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     logger.info(

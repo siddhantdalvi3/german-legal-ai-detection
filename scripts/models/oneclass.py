@@ -3,7 +3,7 @@ import logging
 import mlflow
 import numpy as np
 from sklearn.ensemble import IsolationForest
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.svm import OneClassSVM
 
@@ -18,14 +18,19 @@ def _to_binary(y: np.ndarray) -> np.ndarray:
 
 
 def _log_oneclass_metrics(pipeline, texts_val, y_val, prefix: str):
-    y_pred = _to_binary(pipeline.predict(texts_val))
-    y_scores = pipeline.decision_function(texts_val)
+    y_pred_raw = pipeline.predict(texts_val)
+    y_scores_raw = pipeline.decision_function(texts_val)
+    y_prob = 1 - (y_scores_raw - y_scores_raw.min()) / (y_scores_raw.max() - y_scores_raw.min() + 1e-10)
+    y_pred = _to_binary(y_pred_raw)
 
     if len(set(y_val)) < 2 or len(set(y_pred)) < 2:
         mlflow.log_metric(f"{prefix}_n_val", len(y_val))
         mlflow.log_metric(f"{prefix}_n_pred_positive", int(y_pred.sum()))
         logger.info(f"  {prefix} WARNING: only one class in validation/prediction, skipping metrics")
         return
+
+    if len(set(y_val)) > 1:
+        mlflow.log_metric(f"{prefix}_auroc", roc_auc_score(y_val, y_prob))
 
     tn, fp, fn, tp = confusion_matrix(y_val, y_pred).ravel()
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0

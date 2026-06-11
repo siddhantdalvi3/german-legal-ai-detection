@@ -4,7 +4,7 @@ import mlflow
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.pipeline import Pipeline
 
 from config import CLASSIFIER_THRESHOLDS, RANDOM_SEED
@@ -65,6 +65,9 @@ def train_random_forest(texts_train, y_train, texts_val, y_val,
 
 def _log_metrics(pipeline, texts_val, y_val, prefix: str):
     y_prob = pipeline.predict_proba(texts_val)[:, 1]
+
+    if len(set(y_val)) > 1:
+        mlflow.log_metric(f"{prefix}_auroc", roc_auc_score(y_val, y_prob))
 
     for threshold in CLASSIFIER_THRESHOLDS:
         y_t = (y_prob >= threshold).astype(int)

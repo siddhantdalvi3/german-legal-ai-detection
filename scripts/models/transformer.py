@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from tqdm import tqdm
 from transformers import (
     BertConfig,
@@ -70,6 +70,9 @@ def compute_metrics(eval_pred):
     probabilities = 1 / (1 + np.exp(-logits))
     y_prob = probabilities[:, 1] if probabilities.ndim > 1 else probabilities
     metrics = {}
+
+    if len(set(labels)) > 1:
+        metrics["auroc"] = roc_auc_score(labels, y_prob)
 
     for threshold in CLASSIFIER_THRESHOLDS:
         y_pred = (y_prob >= threshold).astype(int)

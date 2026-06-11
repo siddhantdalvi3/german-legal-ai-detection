@@ -62,10 +62,11 @@ def extract_human_gesetze() -> list[dict]:
             if doc_date is not None and doc_date > MAX_DATE_PARSE:
                 excluded += 1
                 continue
+            group_id = f"gesetze__{xml_file.stem}"
             paragraphs = extract_text_from_xml(content)
             for p in paragraphs:
                 if not is_boilerplate(p):
-                    texts.append({"text": p, "label": 0, "source": "gesetze"})
+                    texts.append({"text": p, "label": 0, "source": "gesetze", "group_id": group_id})
         except Exception as e:
             logger.warning(f"Error parsing {xml_file}: {e}")
     if excluded:
@@ -83,11 +84,11 @@ def extract_human_openlegaldata() -> list[dict]:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT text, date FROM cases WHERE language='de' AND text IS NOT NULL "
+                "SELECT rowid, text, date FROM cases WHERE language='de' AND text IS NOT NULL "
                 "AND length(text) > 100 ORDER BY date DESC LIMIT 50000"
             )
             for row in cursor.fetchall():
-                text, doc_date = row
+                rowid, text, doc_date = row
                 if doc_date:
                     try:
                         d = date.fromisoformat(str(doc_date)[:10])
@@ -99,7 +100,7 @@ def extract_human_openlegaldata() -> list[dict]:
                 clean = re.sub(r"<[^>]+>", " ", text)
                 clean = re.sub(r"\s+", " ", clean).strip()
                 if len(clean) >= 100:
-                    texts.append({"text": clean, "label": 0, "source": "old"})
+                    texts.append({"text": clean, "label": 0, "source": "old", "group_id": f"old__{rowid}"})
         except sqlite3.OperationalError:
             logger.warning("OpenLegalData DB has no 'cases' table or different schema")
         conn.close()
@@ -112,14 +113,14 @@ def extract_human_rii(limit: int | None = None) -> list[dict]:
     texts = []
     if cache_path.exists():
         with open(cache_path) as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 if limit and len(texts) >= limit:
                     break
                 try:
                     row = json.loads(line)
                     text = row.get("text", "")
                     if len(text) >= 100:
-                        texts.append({"text": text, "label": 0, "source": "rii"})
+                        texts.append({"text": text, "label": 0, "source": "rii", "group_id": f"rii__{idx}"})
                 except json.JSONDecodeError:
                     continue
     return texts
@@ -133,13 +134,13 @@ def extract_human_fobbe() -> list[dict]:
         return texts
     for cache_file in sorted(cache_dir.glob("*.jsonl")):
         with open(cache_file) as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
                     text = row.get("text", "")
                     source = row.get("source", f"fobbe_{cache_file.stem}")
                     if len(text) >= 20:
-                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True})
+                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True, "group_id": f"fobbe__{cache_file.stem}__{idx}"})
                 except json.JSONDecodeError:
                     continue
     return texts
@@ -152,12 +153,12 @@ def extract_human_dip() -> list[dict]:
         if not cache.exists():
             continue
         with open(cache) as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
                     text = row.get("text", "")
                     if len(text) >= 100:
-                        texts.append({"text": text, "label": 0, "source": f"dip_{name}"})
+                        texts.append({"text": text, "label": 0, "source": f"dip_{name}", "group_id": f"dip__{name}__{idx}"})
                 except json.JSONDecodeError:
                     continue
     return texts
@@ -169,12 +170,12 @@ def extract_human_gesp() -> list[dict]:
     if not cache.exists():
         return texts
     with open(cache) as f:
-        for line in f:
+        for idx, line in enumerate(f):
             try:
                 row = json.loads(line)
                 text = row.get("text", "")
                 if len(text) >= 100:
-                    texts.append({"text": text, "label": 0, "source": f"gesp_{row.get('state','unknown')}"})
+                    texts.append({"text": text, "label": 0, "source": f"gesp_{row.get('state','unknown')}", "group_id": f"gesp__{idx}"})
             except json.JSONDecodeError:
                 continue
     return texts
@@ -188,13 +189,13 @@ def extract_human_legal_commons() -> list[dict]:
         return texts
     for cache_file in sorted(cache_dir.glob("*.jsonl")):
         with open(cache_file) as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
                     text = row.get("text", "")
                     source = row.get("source", "legal_commons")
                     if len(text) >= 20:
-                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True})
+                        texts.append({"text": text, "label": 0, "source": source, "pre_split": True, "group_id": f"legal_commons__{cache_file.stem}__{idx}"})
                 except json.JSONDecodeError:
                     continue
     return texts
@@ -204,7 +205,7 @@ def extract_ai_texts() -> list[dict]:
     texts = []
     for jsonl_file in AI_GENERATED_DIR.glob("*.jsonl"):
         with open(jsonl_file) as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 try:
                     data = json.loads(line)
                     response = data.get("response", "")
@@ -214,6 +215,7 @@ def extract_ai_texts() -> list[dict]:
                         "source": f"ai_{data.get('model','unknown')}",
                         "model": data.get("model", ""),
                         "temperature": data.get("temperature", 0),
+                        "group_id": f"ai__{jsonl_file.stem}__{idx}",
                     })
                 except json.JSONDecodeError:
                     continue
@@ -312,11 +314,14 @@ def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fo
     all_records = sentence_split_records(all_records)
     logger.info(f"Total sentences after splitting: {len(all_records)}")
 
-    random.shuffle(all_records)
+    unique_groups = list(set(rec["group_id"] for rec in all_records))
+    random.shuffle(unique_groups)
+    split_idx = int(len(unique_groups) * TEST_SPLIT)
+    test_groups = set(unique_groups[:split_idx])
+    train_groups = set(unique_groups[split_idx:])
 
-    split_idx = int(len(all_records) * TEST_SPLIT)
-    train_records = all_records[split_idx:]
-    test_records = all_records[:split_idx]
+    train_records = [r for r in all_records if r["group_id"] in train_groups]
+    test_records = [r for r in all_records if r["group_id"] in test_groups]
 
     def write_jsonl(records, path):
         with open(path, "w", encoding="utf-8") as f:

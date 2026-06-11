@@ -155,20 +155,25 @@ def evaluate(one_class: bool = False):
         human_mask = [l == 0 for l in labels_train]
         texts_train_human = [t for t, m in zip(texts_train, human_mask) if m]
         split = int(len(texts_train_human) * 0.9)
-        texts_val_human = texts_train_human[split:]
-        texts_val = texts_val_human + [t for t, m in zip(texts_train, human_mask) if not m][:5000]
-        labels_val = [0] * len(texts_val_human) + [1] * len([t for t, m in zip(texts_train, human_mask) if not m][:5000])
+        texts_cal = texts_train_human[split:]
+        labels_cal = [0] * len(texts_cal)
+        texts_train_human_part = texts_train_human[:split]
+        texts_ai_for_val = [t for t, m in zip(texts_train, human_mask) if not m][:5000]
+        texts_val = texts_cal + texts_ai_for_val
+        labels_val = labels_cal + [1] * len(texts_ai_for_val)
 
         from scripts.models.oneclass import train_oneclass_svm, train_isolation_forest
 
         logger.info("Retraining One-Class SVM for evaluation...")
-        svm_model, svm_id = train_oneclass_svm(texts_train_human, texts_val, labels_val)
+        svm_model, svm_id = train_oneclass_svm(texts_train_human_part, texts_val, labels_val)
         evaluate_oneclass(svm_model, texts_test, labels_test,
+                          texts_cal=texts_cal, labels_cal=labels_cal,
                           experiment_name="oneclass_svm", run_id=svm_id)
 
         logger.info("Retraining Isolation Forest for evaluation...")
-        if_model, if_id = train_isolation_forest(texts_train_human, texts_val, labels_val)
+        if_model, if_id = train_isolation_forest(texts_train_human_part, texts_val, labels_val)
         evaluate_oneclass(if_model, texts_test, labels_test,
+                          texts_cal=texts_cal, labels_cal=labels_cal,
                           experiment_name="oneclass_if", run_id=if_id)
 
         logger.info("One-class evaluation complete!")
@@ -185,6 +190,7 @@ def evaluate(one_class: bool = False):
         texts_train_part, labels_train_part, texts_val, labels_val
     )
     evaluate_baseline(lr_model, texts_test, labels_test,
+                      texts_cal=texts_val, labels_cal=labels_val,
                       experiment_name="baseline_lr", run_id=lr_id)
 
     logger.info("Retraining RF for evaluation...")
@@ -192,6 +198,7 @@ def evaluate(one_class: bool = False):
         texts_train_part, labels_train_part, texts_val, labels_val
     )
     evaluate_baseline(rf_model, texts_test, labels_test,
+                      texts_cal=texts_val, labels_cal=labels_val,
                       experiment_name="baseline_rf", run_id=rf_id)
 
     logger.info("Evaluation complete!")
