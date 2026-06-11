@@ -18,6 +18,7 @@ LEVELS = {
     "--preprocess": "Preprocessing: Building dataset...",
     "--train": "Training: Training models...",
     "--evaluate": "Evaluation: Evaluating models...",
+    "--cross-validate": "Cross-validation: Leave-one-out by model family...",
     "--predict": "Inference: Making predictions...",
     "--serve": "Serving: Starting API server...",
     "--setup": "Setup: Checking environment...",
@@ -130,6 +131,27 @@ def preprocess(use_openlegaldata: bool = False, use_rii: bool = False, use_fobbe
 def train(one_class: bool = False):
     from scripts.train import train_all
     train_all(one_class=one_class)
+
+
+@stage
+def cross_validate():
+    import json
+    from config import PROCESSED_DIR
+    from scripts.evaluate import (
+        load_jsonl_records, cross_validate_baselines
+    )
+
+    train_path = PROCESSED_DIR / "train.jsonl"
+    test_path = PROCESSED_DIR / "test.jsonl"
+
+    if not train_path.exists() or not test_path.exists():
+        logger.error("Run --preprocess first")
+        return
+
+    train_records = load_jsonl_records(train_path)
+    test_records = load_jsonl_records(test_path)
+
+    cross_validate_baselines(train_records, test_records)
 
 
 @stage
@@ -266,6 +288,7 @@ def main():
     parser.add_argument("--train", action="store_true", help="Train all models")
     parser.add_argument("--one-class", action="store_true", help="Train one-class models (OC-SVM, Isolation Forest) on human data only")
     parser.add_argument("--evaluate", action="store_true", help="Evaluate all models")
+    parser.add_argument("--cross-validate", action="store_true", help="Leave-one-out cross-validation by model family")
     parser.add_argument("--predict", nargs="?", const=True, help="Make predictions")
     parser.add_argument("--serve", action="store_true", help="Start API server")
     parser.add_argument("--all", action="store_true", help="Run full pipeline")
@@ -301,6 +324,8 @@ def main():
         train(one_class=args.one_class)
     if args.evaluate:
         evaluate(one_class=args.one_class)
+    if args.cross_validate:
+        cross_validate()
     if args.serve:
         serve()
 
@@ -318,8 +343,8 @@ def main():
         predict(args)
 
     if not any([args.setup, args.mine, args.generate, args.preprocess,
-                args.train, args.evaluate, args.serve, args.all, args.list_models,
-                args.sources,
+                args.train, args.evaluate, args.cross_validate, args.serve, args.all,
+                args.list_models, args.sources,
                 args.predict is not None, has_input,
                 args.openlegaldata, args.rii, args.fobbe is not None, args.legal_commons,
                 args.dip, args.gesp, args.one_class]):
