@@ -6,6 +6,7 @@ from pathlib import Path
 import requests
 
 from config import DATA_DIR, MAX_DATE
+from utils.mining import append_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,6 @@ def _api_get(endpoint: str, params: dict | None = None) -> dict | None:
     except Exception as e:
         logger.warning(f"API error: {e}")
         return None
-
-
-def _append_jsonl(path: Path, row: dict):
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _count_lines(path: Path) -> int:
@@ -81,7 +77,7 @@ def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):
                     "titel": d.get("titel"),
                     "text": text,
                 }
-                _append_jsonl(text_path, row)
+                append_jsonl(text_path, row)
                 saved += 1
 
         cursor = data.get("cursor")

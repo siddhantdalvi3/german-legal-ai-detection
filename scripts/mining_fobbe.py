@@ -4,7 +4,6 @@ import zipfile
 import io
 import re
 from pathlib import Path
-from urllib.parse import urljoin
 
 import requests
 
@@ -171,9 +170,5 @@ def extract_court_decisions(datasets: list[str] | None = None) -> list[str]:
     return all_texts
 
 
-def mine_fobbe(datasets: list[str] | None = None) -> list[str]:
-    return extract_court_decisions(datasets)
-
-
 if __name__ == "__main__":
-    mine_fobbe()
+    extract_court_decisions()

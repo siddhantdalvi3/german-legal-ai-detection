@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import zipfile
 from pathlib import Path
 
@@ -104,3 +103,8 @@ def find_xml_files(module_path: Path):
             for f in subdir.iterdir():
                 if f.suffix.lower() == ".xml":
                     yield f
+
+
+def append_jsonl(path: Path, row: dict):
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")

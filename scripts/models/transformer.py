@@ -6,7 +6,6 @@ import torch
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from sklearn.metrics import confusion_matrix
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import (
     BertConfig,

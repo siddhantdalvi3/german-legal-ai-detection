@@ -7,7 +7,6 @@ Output: data/processed/hard_set.jsonl  (200 sentences, label=0)
 """
 
 import json
-import re
 import time
 from pathlib import Path
 

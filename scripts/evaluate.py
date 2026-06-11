@@ -4,7 +4,6 @@ import logging
 import mlflow
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 from config import CLASSIFIER_THRESHOLDS
 
@@ -69,50 +68,6 @@ def evaluate_baseline(pipeline, texts, labels,
         mlflow.log_dict(report, "classification_report.json")
 
     return results
-
-
-def evaluate_gbert(model, tokenizer, texts, labels,
-                   experiment_name: str = "gbert_lora", run_id: str = None):
-    from scripts.models.transformer import predict_gbert
-
-    mlflow.set_experiment(experiment_name)
-    y_prob = []
-    for text in texts:
-        _, prob = predict_gbert(model, tokenizer, text)
-        y_prob.append(prob)
-    y_prob = np.array(y_prob)
-
-    results = _compute_metrics(y_prob, labels, prefix="test")
-    logger.info(f"\nGBERT LoRA — Test Results:")
-    _print_results(results)
-
-    with mlflow.start_run(run_id=run_id) if run_id else mlflow.start_run():
-        mlflow.log_metrics({
-            f"test_{k}": v for k, v in results.items()
-        })
-
-    return results
-
-
-def evaluate_hard_set(model_predict_fn, texts, labels,
-                      threshold: float = 0.9):
-    y_prob = model_predict_fn(texts)
-    y_pred = (y_prob >= threshold).astype(int)
-
-    _tn, _fp, _fn, _tp = confusion_matrix(labels, y_pred, labels=[0, 1]).ravel()
-    tn, fp, fn, tp = _tn, _fp, _fn, _tp
-
-    logger.info(f"\n{'='*50}")
-    logger.info(f"HARD SET EVALUATION (threshold={threshold})")
-    logger.info(f"{'='*50}")
-    logger.info(f"  True Negatives (correctly Human):  {tn}")
-    logger.info(f"  False Positives (Human→AI ERROR):  {fp}")
-    logger.info(f"  False Negatives (AI→Human error):  {fn}")
-    logger.info(f"  True Positives (correctly AI):     {tp}")
-    logger.info(f"\n  Precision (AI class): {tp/(tp+fp):.4f}" if (tp+fp) > 0 else "N/A")
-    logger.info(f"  False Positive Rate:  {fp/(fp+tn):.4f}" if (fp+tn) > 0 else "N/A")
-
-    return {"fp": int(fp), "fn": int(fn), "tp": int(tp), "tn": int(tn)}
 
 
 def _compute_metrics(y_prob, y_true, prefix: str = ""):

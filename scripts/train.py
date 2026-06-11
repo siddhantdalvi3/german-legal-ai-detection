@@ -1,21 +1,11 @@
-import json
 import logging
 
 from config import PROCESSED_DIR
+from scripts.evaluate import load_jsonl
 from scripts.models.baseline import train_baseline_pipeline
 from scripts.models.transformer import train_gbert
 
 logger = logging.getLogger(__name__)
-
-
-def load_jsonl(path):
-    texts, labels = [], []
-    with open(path) as f:
-        for line in f:
-            data = json.loads(line)
-            texts.append(data["text"])
-            labels.append(data["label"])
-    return texts, labels
 
 
 def train_all(one_class: bool = False):

@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -10,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from config import DATA_DIR
+from utils.mining import append_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ def extract_texts():
                 "file": rel_str,
                 "text": text,
             }
-            _append_jsonl(text_cache, row)
+            append_jsonl(text_cache, row)
             saved += 1
 
             if (i + 1) % 2000 == 0:
@@ -198,11 +198,6 @@ def extract_texts():
             pass
 
     logger.info(f"Extracted {saved} texts to {text_cache}")
-
-
-def _append_jsonl(path: Path, row: dict):
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def mine_gesp(all_files: bool = False):

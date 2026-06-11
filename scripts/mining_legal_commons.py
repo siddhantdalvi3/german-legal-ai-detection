@@ -98,9 +98,5 @@ def extract_court_decisions(splits: list[str] | None = None) -> list[str]:
     return all_texts
 
 
-def mine_legal_commons(splits: list[str] | None = None) -> list[str]:
-    return extract_court_decisions(splits)
-
-
 if __name__ == "__main__":
-    mine_legal_commons()
+    extract_court_decisions()

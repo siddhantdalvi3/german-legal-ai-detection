@@ -88,7 +88,6 @@ def download_dump(limit: int = DEFAULT_LIMIT):
 
     async def _download():
         count = 0
-        shown_warning = False
         async for j in downloader.iter_first_n_judgements(limit, max_per_second=5.0):
             _append_cache(j)
             count += 1

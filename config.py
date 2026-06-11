@@ -26,8 +26,6 @@ def is_macos() -> bool:
 
 DATA_DIR = PROJECT_ROOT / "data"
 PROCESSED_DIR = DATA_DIR / "processed"
-MODELS_DIR = PROJECT_ROOT / "models"
-MLRUNS_DIR = PROJECT_ROOT / "mlruns"
 
 GESETZE_DIR = DATA_DIR / "gesetze_im_internet"
 OPENLEGALDATA_DIR = DATA_DIR / "openlegaldata"
@@ -37,9 +35,6 @@ LEGAL_COMMONS_DIR = DATA_DIR / "legal_commons"
 DIP_DIR = DATA_DIR / "dip_bundestag"
 GESP_DIR = DATA_DIR / "gesp"
 AI_GENERATED_DIR = DATA_DIR / "ai_generated"
-
-GESETZE_TOC_URL = "https://www.gesetze-im-internet.de/gii-toc.xml"
-OPENLEGALDATA_DUMP_URL = "https://static.openlegaldata.io/dumps/latest/"
 
 AVAILABLE_MODELS = {
     "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
@@ -62,17 +57,10 @@ AVAILABLE_MODELS = {
     },
 }
 
-OLLAMA_MODELS = [m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "ollama"]
-DEFAULT_GENERATION_MODELS = list(OLLAMA_MODELS)
-MLX_MODEL = next(m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx")
-MLX_VLM_MODEL = next((m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "mlx_vlm"), None)
+DEFAULT_GENERATION_MODELS = [m["name"] for m in AVAILABLE_MODELS.values() if m["type"] == "ollama"]
 
 TEMPERATURES = [0.3, 0.7]
 SENTENCES_PER_COMBINATION = 10_000
-AI_TARGET = 450_000
-
-HUMAN_TARGET = 500_000
-DATASET_TARGET = 1_000_000
 
 SPACY_MODEL = "de_core_news_sm"
 BERT_MODEL = "deepset/gbert-base"
@@ -85,7 +73,5 @@ MAX_DATE = "2021-12-31"
 
 RANDOM_SEED = 42
 TEST_SPLIT = 0.1
-VAL_SPLIT = 0.1
-N_FOLDS = 5
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
