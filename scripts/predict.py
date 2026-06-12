@@ -172,7 +172,7 @@ def main():
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
     elif args.file:
-        with open(args.file) as f:
+        with open(args.file, encoding="utf-8", errors="replace") as f:
             texts = [line.strip() for line in f if line.strip()]
         results = pipeline.predict_batch(texts)
         for text, result in zip(texts, results):

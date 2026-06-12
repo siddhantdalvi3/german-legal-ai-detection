@@ -22,18 +22,18 @@ def _process_file(args):
     name = infile.stem
     outfile = output_dir / f"{name}.jsonl"
     if outfile.exists():
-        cnt = sum(1 for _ in open(outfile))
+        cnt = sum(1 for _ in open(outfile, encoding="utf-8", errors="replace"))
         return name, 0, cnt, "skipped"
 
     nlp = spacy.load("de_core_news_sm")
 
-    with open(infile) as f:
+    with open(infile, encoding="utf-8", errors="replace") as f:
         docs = [json.loads(line) for line in f]
 
     texts = [(d["text"], d) for d in docs if len(d.get("text", "")) >= 100]
     count = 0
 
-    with open(outfile, "w") as f_out:
+    with open(outfile, "w", encoding="utf-8") as f_out:
         for doc, record in nlp.pipe(texts, batch_size=BATCH_SIZE, as_tuples=True):
             source = record.get("source", f"{source_prefix}_{name}")
             for sent in doc.sents:

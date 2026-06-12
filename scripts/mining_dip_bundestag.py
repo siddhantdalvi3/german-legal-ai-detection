@@ -37,7 +37,7 @@ def _api_get(endpoint: str, params: dict | None = None) -> dict | None:
 def _count_lines(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for _ in open(path))
+    return sum(1 for _ in open(path, encoding="utf-8", errors="replace"))
 
 
 def mine_endpoint(endpoint: str, doc_type: str, limit: int | None = None):

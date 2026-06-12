@@ -75,7 +75,7 @@ def _processed_source_breakdown(path: Path) -> dict[str, int]:
     counts: dict[str, int] = defaultdict(int)
     if not path.exists():
         return counts
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
                 row = json.loads(line)
@@ -255,7 +255,7 @@ def report_sources():
     # Label counts
     label_counts = {0: 0, 1: 0}
     for path in (train_file, test_file):
-        with open(path) as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     row = json.loads(line)

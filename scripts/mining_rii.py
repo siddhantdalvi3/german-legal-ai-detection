@@ -31,7 +31,7 @@ def _iter_cache() -> list[dict]:
     if not RII_CACHE.exists():
         return []
     results = []
-    with open(RII_CACHE) as f:
+    with open(RII_CACHE, encoding="utf-8", errors="replace") as f:
         for line in f:
             row = json.loads(line)
             results.append(row)
@@ -50,7 +50,7 @@ def _append_cache(judgement) -> None:
         "gertyp": getattr(judgement, "gertyp", ""),
         "text": text,
     }
-    with open(RII_CACHE, "a") as f:
+    with open(RII_CACHE, "a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
@@ -70,7 +70,7 @@ def _extract_text(judgement) -> str | None:
 def download_dump(limit: int = DEFAULT_LIMIT):
     """Download judgements from RII and cache to disk. Skips if already cached."""
     if RII_CACHE.exists():
-        cached = sum(1 for _ in open(RII_CACHE))
+        cached = sum(1 for _ in open(RII_CACHE, encoding="utf-8", errors="replace"))
         logger.info(f"RII cache found: {cached} judgements, skipping download")
         return
 
@@ -96,7 +96,7 @@ def download_dump(limit: int = DEFAULT_LIMIT):
         logger.info(f"Download complete: {count} judgements cached")
 
     asyncio.run(_download())
-    cached = sum(1 for _ in open(RII_CACHE))
+    cached = sum(1 for _ in open(RII_CACHE, encoding="utf-8", errors="replace"))
     logger.info(f"Total cached: {cached} judgements with narrative text")
 
 

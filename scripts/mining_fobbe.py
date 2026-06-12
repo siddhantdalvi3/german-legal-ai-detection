@@ -137,7 +137,7 @@ def download_datasets(datasets: list[str] | None = None):
             logger.warning(f"Unknown Fobbe dataset: {name}")
             continue
         if _cache_exists(name):
-            cached = sum(1 for _ in open(_cache_path(name)))
+            cached = sum(1 for _ in open(_cache_path(name), encoding="utf-8", errors="replace"))
             logger.info(f"{FOBBE_DATASETS[name]['name']} already cached ({cached} decisions)")
             continue
 

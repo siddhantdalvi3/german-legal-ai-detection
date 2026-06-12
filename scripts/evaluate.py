@@ -15,7 +15,7 @@ MAX_FPR = 0.01
 
 def load_jsonl(path):
     texts, labels = [], []
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             data = json.loads(line)
             texts.append(data["text"])
@@ -24,7 +24,7 @@ def load_jsonl(path):
 
 
 def load_jsonl_records(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         return [json.loads(line) for line in f]
 
 

@@ -31,7 +31,7 @@ def _cache_path(split: str) -> Path:
 def _download_split(split: str):
     """Download a single split and cache it."""
     if _cache_path(split).exists():
-        cached = sum(1 for _ in open(_cache_path(split)))
+        cached = sum(1 for _ in open(_cache_path(split), encoding="utf-8", errors="replace"))
         logger.info(f"  {split}: {cached} docs already cached, skipping")
         return
 

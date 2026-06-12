@@ -41,7 +41,7 @@ def load_index():
     if not index_file.exists():
         return {}
     try:
-        with open(index_file) as f:
+        with open(index_file, encoding="utf-8", errors="replace") as f:
             return json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         return {}
@@ -49,7 +49,7 @@ def load_index():
 
 def save_index(index: dict):
     index_file = DATA_DIR / "index.json"
-    with open(index_file, "w") as f:
+    with open(index_file, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=2)
 
 

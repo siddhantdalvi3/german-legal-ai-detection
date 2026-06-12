@@ -112,7 +112,7 @@ def extract_human_rii(limit: int | None = None) -> list[dict]:
     cache_path = RII_DIR / "judgements.jsonl"
     texts = []
     if cache_path.exists():
-        with open(cache_path) as f:
+        with open(cache_path, encoding="utf-8", errors="replace") as f:
             for idx, line in enumerate(f):
                 if limit and len(texts) >= limit:
                     break
@@ -133,7 +133,7 @@ def extract_human_fobbe() -> list[dict]:
         logger.warning("Fobbe cache_sentences not found, run presplit_cache.py first")
         return texts
     for cache_file in sorted(cache_dir.glob("*.jsonl")):
-        with open(cache_file) as f:
+        with open(cache_file, encoding="utf-8", errors="replace") as f:
             for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
@@ -152,7 +152,7 @@ def extract_human_dip() -> list[dict]:
         cache = DIP_DIR / f"{name}.jsonl"
         if not cache.exists():
             continue
-        with open(cache) as f:
+        with open(cache, encoding="utf-8", errors="replace") as f:
             for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
@@ -169,7 +169,7 @@ def extract_human_gesp() -> list[dict]:
     cache = GESP_DIR / "texts.jsonl"
     if not cache.exists():
         return texts
-    with open(cache) as f:
+    with open(cache, encoding="utf-8", errors="replace") as f:
         for idx, line in enumerate(f):
             try:
                 row = json.loads(line)
@@ -188,7 +188,7 @@ def extract_human_legal_commons() -> list[dict]:
         logger.warning("Legal Commons cache_sentences not found, run presplit_cache.py first")
         return texts
     for cache_file in sorted(cache_dir.glob("*.jsonl")):
-        with open(cache_file) as f:
+        with open(cache_file, encoding="utf-8", errors="replace") as f:
             for idx, line in enumerate(f):
                 try:
                     row = json.loads(line)
@@ -204,7 +204,7 @@ def extract_human_legal_commons() -> list[dict]:
 def extract_ai_texts() -> list[dict]:
     texts = []
     for jsonl_file in AI_GENERATED_DIR.glob("*.jsonl"):
-        with open(jsonl_file) as f:
+        with open(jsonl_file, encoding="utf-8", errors="replace") as f:
             for idx, line in enumerate(f):
                 try:
                     data = json.loads(line)

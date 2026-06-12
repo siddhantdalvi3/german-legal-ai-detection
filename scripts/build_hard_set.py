@@ -155,7 +155,7 @@ def collect_sentences() -> list[str]:
 def load_existing() -> set[str]:
     existing = set()
     if HARD_SET_PATH.exists():
-        for line in open(HARD_SET_PATH):
+        for line in open(HARD_SET_PATH, encoding="utf-8", errors="replace"):
             try:
                 rec = json.loads(line)
                 existing.add(rec.get("text", ""))

@@ -107,9 +107,10 @@ def _run_gesp_state(state_code: str, state_name: str, all_files: bool = False) -
 def run_gesp(all_files: bool = False):
     text_cache = GESP_DIR / "texts.jsonl"
     if text_cache.exists():
-        count = sum(1 for _ in open(text_cache))
+        count = sum(1 for _ in open(text_cache, encoding="utf-8", errors="replace"))
         logger.info(f"GESP text cache: {count} entries, skipping download")
         return
+
 
     if not _check_gesp_installed():
         logger.info("Installing gesp...")
@@ -152,7 +153,7 @@ def run_gesp(all_files: bool = False):
 def extract_texts():
     text_cache = GESP_DIR / "texts.jsonl"
     if text_cache.exists():
-        count = sum(1 for _ in open(text_cache))
+        count = sum(1 for _ in open(text_cache, encoding="utf-8", errors="replace"))
         logger.info(f"GESP text cache: {count} entries")
         return
 
