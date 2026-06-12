@@ -21,13 +21,29 @@ from utils.mining import logger
 
 OLLAMA_API = "http://localhost:11434/api/generate"
 
-PROMPT_TEMPLATE = (
-    "Du bist Jurist im Bundesministerium. "
-    "Schreibe einen formellen juristischen Text auf Deutsch über folgendes Thema: {topic}. "
-    "Verwende präzise juristische Fachsprache und einen offiziellen Amtsstil. "
-    "Der Text soll 5-10 Sätze lang sein. "
-    "Beziehe dich konkret auf die einschlägigen Gesetze und Paragraphen."
-)
+PROMPT_TEMPLATES: dict[str, str] = {
+    "gesetze": (
+        "Du bist Jurist im Bundesministerium der Justiz. "
+        "Schreibe einen formellen juristischen Text auf Deutsch über folgendes Thema: {topic}. "
+        "Verwende präzise juristische Fachsprache und einen offiziellen Amtsstil. "
+        "Der Text soll 5-10 Sätze lang sein. "
+        "Beziehe dich konkret auf die einschlägigen Gesetze und Paragraphen."
+    ),
+    "dip": (
+        "Du bist wissenschaftlicher Mitarbeiter im Deutschen Bundestag. "
+        "Verfasse einen sachlichen parlamentarischen Text auf Deutsch zu folgendem Gegenstand: {topic}. "
+        "Der Text soll 5-10 Sätze lang sein. "
+        "Konzentriere dich auf die politische und rechtliche Einordnung des Themas."
+    ),
+    "gesp": (
+        "Du bist Richter an einem deutschen Gericht. "
+        "Verfasse einen Abschnitt einer gerichtlichen Entscheidung auf Deutsch zu folgendem Sachverhalt: {topic}. "
+        "Verwende die typische Sprache und Struktur deutscher Urteile. "
+        "Der Text soll 5-10 Sätze lang sein."
+    ),
+}
+
+DEFAULT_PROMPT_TEMPLATE = PROMPT_TEMPLATES["gesetze"]
 
 TOPICS_CACHE = None
 
@@ -54,7 +70,7 @@ def start_ollama():
     raise RuntimeError("Failed to start Ollama server")
 
 
-def load_topics() -> list[str]:
+def load_topics() -> list[dict]:
     global TOPICS_CACHE
     if TOPICS_CACHE is not None:
         return TOPICS_CACHE
@@ -62,30 +78,30 @@ def load_topics() -> list[str]:
     combined_path = TOPICS_DIR / "all_topics.jsonl"
     if combined_path.exists():
         lines = [l.strip() for l in combined_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-        TOPICS_CACHE = [json.loads(l)["topic"] for l in lines]
+        TOPICS_CACHE = [json.loads(l) for l in lines]
         logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from combined pool ({TOPICS_DIR / 'all_topics.jsonl'})")
         return TOPICS_CACHE
 
     logger.info("Combined topics not found. Run `python scripts/extract_topics.py` first.")
     fallback = [
-        "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht",
-        "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB",
-        "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht",
-        "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit",
-        "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB",
-        "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht",
-        "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB",
-        "Die Voraussetzungen der Pfändung von Arbeitseinkommen",
-        "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr",
-        "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung",
+        {"topic": "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht", "source": "gesetze"},
+        {"topic": "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB", "source": "gesetze"},
+        {"topic": "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht", "source": "gesetze"},
+        {"topic": "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit", "source": "gesetze"},
+        {"topic": "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB", "source": "gesetze"},
+        {"topic": "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht", "source": "gesetze"},
+        {"topic": "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB", "source": "gesetze"},
+        {"topic": "Die Voraussetzungen der Pfändung von Arbeitseinkommen", "source": "gesetze"},
+        {"topic": "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr", "source": "gesetze"},
+        {"topic": "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung", "source": "gesetze"},
     ]
     TOPICS_CACHE = fallback
     return fallback
 
 
-def get_topic(topics: list[str], idx: int) -> str:
+def get_topic_entry(topics: list[dict], idx: int) -> dict:
     if not topics:
-        return "Rechtliche Grundlagen und aktuelle Entwicklungen"
+        return {"topic": "Rechtliche Grundlagen und aktuelle Entwicklungen", "source": "gesetze"}
     return topics[idx % len(topics)]
 
 
@@ -233,24 +249,28 @@ def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | Non
                     # Submit up to concurrency prompts at once
                     while len(futures) < concurrency and sentences_in_batch + len(futures) < target:
                         idx = topic_offset + sentences_in_batch + len(futures)
-                        topic = get_topic(topics, idx)
-                        prompt = PROMPT_TEMPLATE.format(topic=topic)
+                        entry = get_topic_entry(topics, idx)
+                        topic = entry["topic"]
+                        source = entry.get("source", "gesetze")
+                        template = PROMPT_TEMPLATES.get(source, DEFAULT_PROMPT_TEMPLATE)
+                        prompt = template.format(topic=topic)
 
                         if model.startswith("mlx:"):
                             mlx_name = model[4:]  # strip "mlx:" prefix
                             future = pool.submit(mlx_generate, mlx_name, prompt, temp)
                         else:
                             future = pool.submit(ollama_generate, model, prompt, temp)
-                        futures[future] = topic
+                        futures[future] = (topic, source)
 
                     # Collect completed results
                     done_futures = {f for f in futures if f.done()}
                     for future in done_futures:
-                        topic = futures.pop(future)
+                        topic, source = futures.pop(future)
                         try:
                             response = future.result()
                             f.write(json.dumps({
                                 "topic": topic,
+                                "topic_source": source,
                                 "model": model_key,
                                 "temperature": temp,
                                 "response": response,
