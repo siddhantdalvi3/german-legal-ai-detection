@@ -51,7 +51,7 @@ def extract_dip_topics(output_path: Path) -> list[dict]:
         cache = DIP_DIR / f"{name}.jsonl"
         if not cache.exists():
             continue
-        with open(cache) as f:
+        with open(cache, encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     d = json.loads(line)
