@@ -31,7 +31,7 @@ def extract_gesetze_topics(output_path: Path) -> list[dict]:
     if not cache_path.exists():
         return []
     topics = []
-    with open(cache_path) as f:
+    with open(cache_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -39,7 +39,7 @@ def extract_gesetze_topics(output_path: Path) -> list[dict]:
             d = json.loads(line)
             topics.append({"topic": d["heading"], "source": "gesetze"})
     logger.info(f"  Gesetze: {len(topics)} topics")
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for t in topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
     return topics
@@ -61,7 +61,7 @@ def extract_dip_topics(output_path: Path) -> list[dict]:
                 except json.JSONDecodeError:
                     continue
     logger.info(f"  DIP: {len(topics)} topics")
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for t in topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
     return topics
@@ -112,7 +112,7 @@ def extract_gesp_html_topics(output_path: Path) -> list[dict]:
                 logger.info(f"    {done}/{len(html_files)} ({len(topics)} topics found)")
 
     logger.info(f"  GESP HTML: {len(topics)} topics from {len(html_files)} files")
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for t in topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
     return topics
@@ -146,7 +146,7 @@ def extract_gesp_xml_topics(output_path: Path) -> list[dict]:
                 continue
 
     logger.info(f"  GESP XML: {len(topics)} topics from XML files")
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for t in topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
     return topics
@@ -154,7 +154,7 @@ def extract_gesp_xml_topics(output_path: Path) -> list[dict]:
 
 def combine_topics(all_topics: list[dict], output_path: Path):
     random.shuffle(all_topics)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for t in all_topics:
             f.write(json.dumps(t, ensure_ascii=False) + "\n")
     source_counts = {}
