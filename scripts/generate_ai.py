@@ -157,7 +157,7 @@ def load_checkpoint(path: Path) -> int:
     if not path.exists():
         return 0
     count = 0
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if line:
