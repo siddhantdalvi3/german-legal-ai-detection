@@ -6,6 +6,11 @@ from xml.etree import ElementTree
 
 from lxml import html as lxml_html
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from config import (
     DATA_DIR,
     DIP_DIR,

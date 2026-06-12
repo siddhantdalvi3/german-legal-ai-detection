@@ -43,10 +43,15 @@ def _fmt_size_bytes(n: int) -> str:
 def _count_lines(path: Path) -> int:
     if not path.exists():
         return 0
-    with open(path) as f:
-        for i, _ in enumerate(f, 1):
-            pass
-    return i
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            with open(path, encoding=enc) as f:
+                for i, _ in enumerate(f, 1):
+                    pass
+            return i
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return 0
 
 
 def _source_name(raw: str) -> str:
