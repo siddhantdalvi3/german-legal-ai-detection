@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import subprocess
 import sys
 import time
@@ -74,7 +75,42 @@ def start_ollama():
     raise RuntimeError("Failed to start Ollama server")
 
 
-def load_topics() -> list[dict]:
+def _generate_synthetic_topics() -> list[dict]:
+    parts = [
+        "Vertragsschluss", "Willenserklärung", "Anfechtung", "Rücktritt", "Schadensersatz",
+        "Sachmängelhaftung", "Kündigung", "Verjährung", "Vollmacht", "Bereicherung",
+        "Unerlaubte Handlung", "Eigentumsübertragung", "Pfandrecht", "Bürgschaft",
+        "Ermessen", "Verhältnismäßigkeit", "Rechtssicherheit", "Vertrauensschutz",
+        "Rechtsbehelf", "Widerspruch", "Klagebefugnis", "Beweislast",
+        "Zeugenvernehmung", "Beschlagnahme", "Durchsuchung", "Rechtsmittel",
+        "Berufung", "Revision", "Amtshaftung", "Gleichbehandlung",
+    ]
+    areas = [
+        "Bürgerliches Recht", "Strafrecht", "Öffentliches Recht", "Verwaltungsrecht",
+        "Steuerrecht", "Arbeitsrecht", "Mietrecht", "Familienrecht", "Erbrecht",
+        "Gesellschaftsrecht", "Wettbewerbsrecht", "Verfassungsrecht", "Sozialrecht",
+        "Europarecht", "Baurecht", "Umweltrecht", "Versicherungsrecht",
+    ]
+    topics = []
+    for p in parts:
+        for a in areas:
+            topics.append({"topic": f"Die {p} im {a}", "source": "synthetic"})
+            topics.append({"topic": f"Die Rechtsfolgen von {p} im {a}", "source": "synthetic"})
+            topics.append({"topic": f"Die Voraussetzungen der {p} im {a}", "source": "synthetic"})
+            topics.append({"topic": f"Die Bedeutung von {p} für das {a}", "source": "synthetic"})
+    for p in parts:
+        topics.append({"topic": f"Die rechtlichen Grundlagen der {p}", "source": "synthetic"})
+        topics.append({"topic": f"Aktuelle Entwicklungen bei der {p}", "source": "synthetic"})
+        topics.append({"topic": f"Die {p} in der Rechtsprechung", "source": "synthetic"})
+        topics.append({"topic": f"Voraussetzungen und Grenzen der {p}", "source": "synthetic"})
+    laws = ["BGB", "StGB", "VwVfG", "AO", "GG", "ZPO", "StPO", "HGB", "GmbHG", "AktG"]
+    for p in parts:
+        for l in laws:
+            par = random.randint(1, 500)
+            topics.append({"topic": f"§ {par} {l}: Die {p}", "source": "synthetic"})
+            topics.append({"topic": f"Die Anwendung von § {par} {l} auf die {p}", "source": "synthetic"})
+    random.shuffle(topics)
+    return topics[:50000]
     global TOPICS_CACHE
     if TOPICS_CACHE is not None:
         return TOPICS_CACHE
@@ -86,21 +122,10 @@ def load_topics() -> list[dict]:
         logger.info(f"Loaded {len(TOPICS_CACHE):,} topics from combined pool ({TOPICS_DIR / 'all_topics.jsonl'})")
         return TOPICS_CACHE
 
-    logger.info("Combined topics not found. Run `python scripts/extract_topics.py` first.")
-    fallback = [
-        {"topic": "Die Voraussetzungen einer wirksamen Willenserklärung im Bürgerlichen Recht", "source": "gesetze"},
-        {"topic": "Die Haftung des Verkäufers für Sachmängel nach § 437 BGB", "source": "gesetze"},
-        {"topic": "Die Grundsätze der Verhältnismäßigkeit im öffentlichen Recht", "source": "gesetze"},
-        {"topic": "Die Rechtsprechung des Bundesverfassungsgerichts zur Meinungsfreiheit", "source": "gesetze"},
-        {"topic": "Die Rechtsfolgen einer nichtigen Ehe nach § 1313 BGB", "source": "gesetze"},
-        {"topic": "Die Vergabe öffentlicher Aufträge nach dem Vergaberecht", "source": "gesetze"},
-        {"topic": "Die Haftung des Staates für Amtspflichtverletzungen nach § 839 BGB", "source": "gesetze"},
-        {"topic": "Die Voraussetzungen der Pfändung von Arbeitseinkommen", "source": "gesetze"},
-        {"topic": "Die Wirksamkeit von Allgemeinen Geschäftsbedingungen im Rechtsverkehr", "source": "gesetze"},
-        {"topic": "Die Haftung des GmbH-Geschäftsführers bei Insolvenzverschleppung", "source": "gesetze"},
-    ]
-    TOPICS_CACHE = fallback
-    return fallback
+    logger.info("Combined topics not found. Generating synthetic topic pool...")
+    TOPICS_CACHE = _generate_synthetic_topics()
+    logger.info(f"Generated {len(TOPICS_CACHE):,} synthetic topics for generation")
+    return TOPICS_CACHE
 
 
 def get_topic_entry(topics: list[dict], idx: int) -> dict:
