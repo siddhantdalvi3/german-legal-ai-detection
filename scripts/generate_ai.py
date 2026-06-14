@@ -119,7 +119,7 @@ def ollama_generate(model: str, prompt: str, temperature: float) -> str:
         "keep_alive": "5m",
         "stream": False,
     }
-    resp = requests.post(OLLAMA_API, json=payload, timeout=120)
+    resp = requests.post(OLLAMA_API, json=payload, timeout=600)
     resp.raise_for_status()
     return resp.json()["response"].strip()
 
