@@ -111,6 +111,9 @@ def _generate_synthetic_topics() -> list[dict]:
             topics.append({"topic": f"Die Anwendung von § {par} {l} auf die {p}", "source": "synthetic"})
     random.shuffle(topics)
     return topics[:50000]
+
+
+def load_topics() -> list[dict]:
     global TOPICS_CACHE
     if TOPICS_CACHE is not None:
         return TOPICS_CACHE
