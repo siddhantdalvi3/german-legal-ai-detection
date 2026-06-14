@@ -10,7 +10,6 @@ HF_CONFIG = "legal"
 
 # All court-decision splits (skip bundesrecht + eurlex which are laws, not narrative prose)
 COURT_SPLITS = [
-    "openlegaldata",
     "bgh",
     "bgh20",
     "bverfg",

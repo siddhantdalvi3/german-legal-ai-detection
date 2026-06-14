@@ -33,7 +33,7 @@ def train_logistic_regression(texts_train, y_train, texts_val, y_val,
         pipeline.fit(texts_train, y_train)
 
         _log_metrics(pipeline, texts_val, y_val, "val")
-        mlflow.sklearn.log_model(pipeline, "model")
+        mlflow.sklearn.log_model(pipeline, "model", pip_requirements=[])
 
         return pipeline, run.info.run_id
 
@@ -58,7 +58,7 @@ def train_random_forest(texts_train, y_train, texts_val, y_val,
         pipeline.fit(texts_train, y_train)
 
         _log_metrics(pipeline, texts_val, y_val, "val")
-        mlflow.sklearn.log_model(pipeline, "model")
+        mlflow.sklearn.log_model(pipeline, "model", pip_requirements=[])
 
         return pipeline, run.info.run_id
 

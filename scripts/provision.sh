@@ -2,75 +2,98 @@
 set -euo pipefail
 
 # ──────────────────────────────────────────────────
-# provision.sh — run ON the cloud GPU instance
-# Usage: bash provision.sh <model1> <model2> ...
-#   e.g. bash provision.sh deepseek qwen3 phi4 gemma4 llama3.1
+# provision.sh — run ON a RunPod cloud GPU instance
+# Usage (single GPU): bash provision.sh qwen3 gemma3 gemma4 mistral phi4 steuerllm
+# Usage (dual GPU):  bash provision.sh deepseek qwen3 gemma3 gemma4 mistral phi4 steuerllm
+#
+# Models with deepseek → GPU0 gets deepseek (10K), GPU1 gets rest (30K)
+# Without deepseek    → single sequential run (30K each)
 # ──────────────────────────────────────────────────
 
 REPO_DIR="$HOME/german-legal-ai-detection"
 MODELS=("$@")
 
-echo "=== Step 1: Install system deps ==="
-sudo apt-get update -qq
-sudo apt-get install -y -qq curl python3 python3-pip
+if [ ${#MODELS[@]} -eq 0 ]; then
+    echo "Usage: bash provision.sh <model1> [model2 ...]"
+    echo "  Single-GPU:  bash provision.sh qwen3 gemma3 gemma4 mistral phi4 steuerllm"
+    echo "  Dual-GPU:    bash provision.sh deepseek qwen3 gemma3 gemma4 mistral phi4 steuerllm"
+    exit 1
+fi
 
-echo "=== Step 2: Install Ollama ==="
+echo "=== Step 1: Install system deps ==="
+apt-get update -qq
+apt-get install -y -qq python3 python3-pip python3-venv git git-lfs wget unzip curl
+
+echo "=== Step 2: Install Ollama (if missing) ==="
 if ! command -v ollama &>/dev/null; then
     curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-echo "=== Step 3: Create project dir ==="
-mkdir -p "$REPO_DIR"
-cd "$REPO_DIR"
-
-echo "=== Step 4: Pull Ollama models in parallel ==="
-# Kill any running ollama server first
-ollama serve &>/dev/null &
+# Start Ollama server if not running
+ollama serve &>/tmp/ollama.log &
 sleep 2
-for model in "${MODELS[@]}"; do
-    ollama_name=""
-    case "$model" in
-        qwen2.5)   ollama_name="qwen2.5:7b" ;;
-        qwen3)     ollama_name="qwen3:14b" ;;
-        gemma3)    ollama_name="gemma3:12b" ;;
-        gemma4)    ollama_name="gemma4:12b" ;;
-        mistral)   ollama_name="mistral" ;;
-        llama3.1)  ollama_name="llama3.1:8b" ;;
-        deepseek)  ollama_name="deepseek-r1:7b" ;;
-        phi4)      ollama_name="phi4:14b" ;;
-        *)
-            echo "Unknown model: $model"
-            exit 1
-            ;;
+
+echo "=== Step 3: Setup Python venv ==="
+cd "$REPO_DIR"
+python3 -m venv venv
+source venv/bin/activate
+pip install requests tqdm -q
+
+echo "=== Step 4: Pull models ==="
+HAS_DEEPSEEK=false
+declare -a PULL_LIST
+for model_key in "${MODELS[@]}"; do
+    case "$model_key" in
+        deepseek)  PULL_LIST+=("deepseek-r1:70b"); HAS_DEEPSEEK=true ;;
+        qwen3)     PULL_LIST+=("qwen3:30b") ;;
+        gemma3)    PULL_LIST+=("gemma3:27b") ;;
+        gemma4)    PULL_LIST+=("gemma4:12b") ;;
+        mistral)   PULL_LIST+=("mistral-small:24b") ;;
+        phi4)      PULL_LIST+=("phi4:14b") ;;
+        steuerllm) echo "Pulling steuerllm:28b from HuggingFace..." ; PULL_LIST+=("steuerllm:28b") ;;
+        *)         echo "Unknown model: $model_key" ;;
     esac
-    echo "Pulling $ollama_name..."
-    ollama pull "$ollama_name" &
+done
+
+echo "Pulling ${#PULL_LIST[@]} models..."
+for model in "${PULL_LIST[@]}"; do
+    echo "  Pulling $model ..."
+    ollama pull "$model" &
+    sleep 3
 done
 wait
 echo "All models pulled."
 
-echo "=== Step 5: Wait for project files to be uploaded ==="
-echo "Upload the bundle now from your local machine:"
-echo "  scp bundle.zip ubuntu@<HOST>:$REPO_DIR/"
-echo ""
-echo "Then press Enter to continue..."
-read -r
+echo "=== Step 5: Run generation ==="
+if [ "$HAS_DEEPSEEK" = true ] && [ ${#MODELS[@]} -gt 1 ]; then
+    # Dual GPU: deepseek on GPU0, rest on GPU1
+    GPU0_MODELS=()
+    GPU1_MODELS=()
+    for model_key in "${MODELS[@]}"; do
+        if [ "$model_key" = "deepseek" ]; then
+            GPU0_MODELS+=("$model_key")
+        else
+            GPU1_MODELS+=("$model_key")
+        fi
+    done
 
-echo "=== Step 6: Extract bundle ==="
-unzip -o bundle.zip -d "$REPO_DIR"
-rm bundle.zip
+    echo "Starting deepseek on GPU0 (10K x 2 temps)..."
+    CUDA_VISIBLE_DEVICES=0 python3 main.py --generate --models "${GPU0_MODELS[@]}" --count 10000 --temps 0.3 0.7 &
+    PID0=$!
 
-echo "=== Step 7: Install Python deps ==="
-pip install requests tqdm -q
+    echo "Starting others on GPU1 (30K x 2 temps)..."
+    CUDA_VISIBLE_DEVICES=1 python3 main.py --generate --models "${GPU1_MODELS[@]}" --count 30000 --temps 0.3 0.7 &
+    PID1=$!
 
-echo "=== Step 8: Run generation ==="
-# Generate for all models at temp 0.3 and 0.7
-for temp in 0.3 0.7; do
-    python3 main.py --generate --models "${MODELS[@]}" --temps "$temp"
-done
+    wait $PID0 $PID1
+else
+    # Single GPU: run all sequentially at 30K each
+    echo "Running all models sequentially (30K x 2 temps each)..."
+    python3 main.py --generate --models "${MODELS[@]}" --count 30000 --temps 0.3 0.7
+fi
 
-echo "=== Step 9: Package results ==="
+echo "=== Step 6: Package results ==="
 cd "$REPO_DIR"
 zip -r ai_generated.zip data/ai_generated/
 echo "Done! Download results:"
-echo "  scp ubuntu@<HOST>:$REPO_DIR/ai_generated.zip ./"
+echo "  scp -P <port> root@<pod-ip>:$REPO_DIR/ai_generated.zip ./"

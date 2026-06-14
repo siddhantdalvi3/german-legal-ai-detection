@@ -38,13 +38,18 @@ AI_GENERATED_DIR = DATA_DIR / "ai_generated"
 
 AVAILABLE_MODELS = {
     "qwen2.5": {"type": "ollama", "name": "qwen2.5:7b", "desc": "Qwen 2.5 7B"},
-    "qwen3": {"type": "ollama", "name": "qwen3:14b", "desc": "Qwen 3 14B"},
-    "gemma3": {"type": "ollama", "name": "gemma3:12b", "desc": "Gemma 3 12B"},
+    "qwen3": {"type": "ollama", "name": "qwen3:30b", "desc": "Qwen 3 30B (MoE)"},
+    "gemma3": {"type": "ollama", "name": "gemma3:27b", "desc": "Gemma 3 27B"},
     "gemma4": {"type": "ollama", "name": "gemma4:12b", "desc": "Gemma 4 12B"},
-    "mistral": {"type": "ollama", "name": "mistral", "desc": "Mistral 7B v0.3"},
-    "llama3.1": {"type": "ollama", "name": "llama3.1:8b", "desc": "Llama 3.1 8B"},
-    "deepseek": {"type": "ollama", "name": "deepseek-r1:7b", "desc": "DeepSeek R1 7B"},
+    "mistral": {"type": "ollama", "name": "mistral-small:24b", "desc": "Mistral Small 24B"},
+    "deepseek": {"type": "ollama", "name": "deepseek-r1:70b", "desc": "DeepSeek R1 70B"},
     "phi4": {"type": "ollama", "name": "phi4:14b", "desc": "Phi-4 14B"},
+    "steuerllm": {
+        "type": "ollama",
+        "name": "steuerllm:28b",
+        "desc": "Open-SteuerLLM 28B (German tax law specialist)",
+        "source": "hf:windprak/open_steuerllm",
+    },
     "mlx": {
         "type": "mlx",
         "name": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",

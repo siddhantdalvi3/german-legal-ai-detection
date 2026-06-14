@@ -116,9 +116,9 @@ def mine(use_openlegaldata: bool = False, use_rii: bool = False, fobbe_datasets:
 
 
 @stage
-def generate_ai(models: list[str] | None = None, temps: list[float] | None = None):
+def generate_ai(models: list[str] | None = None, temps: list[float] | None = None, device: int | None = None, count: int | None = None):
     from scripts.generate_ai import generate_ai_corpus
-    generate_ai_corpus(models, temps)
+    generate_ai_corpus(models, temps, device, count)
 
 
 @stage
@@ -280,6 +280,10 @@ def main():
                         help="Models for generation (e.g. --models mistral qwen2.5 mlx)")
     parser.add_argument("--temps", nargs="*", type=float, default=None,
                         help="Temperatures to use (e.g. --temps 0.1 0.3 0.7)")
+    parser.add_argument("--device", type=int, default=None,
+                        help="GPU device ID to pin (CUDA_VISIBLE_DEVICES)")
+    parser.add_argument("--count", type=int, default=None,
+                        help="Override target sentences per model/temp combination")
     parser.add_argument("--list-models", action="store_true",
                         help="List available generation models")
     parser.add_argument("--sources", action="store_true",
@@ -317,7 +321,7 @@ def main():
     if args.mine:
         mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
     if args.generate:
-        generate_ai(args.models, args.temps)
+        generate_ai(args.models, args.temps, args.device, args.count)
     if args.preprocess:
         preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
     if args.train:
@@ -333,7 +337,7 @@ def main():
         logger.info("Starting full pipeline...")
         setup_environment()
         mine(use_openlegaldata=args.openlegaldata, use_rii=args.rii, fobbe_datasets=args.fobbe, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
-        generate_ai(args.models, args.temps)
+        generate_ai(args.models, args.temps, args.device, args.count)
         preprocess(use_openlegaldata=args.openlegaldata, use_rii=args.rii, use_fobbe=args.fobbe is not None, use_legal_commons=args.legal_commons, use_dip=args.dip, use_gesp=args.gesp)
         train(one_class=args.one_class)
         evaluate(one_class=args.one_class)

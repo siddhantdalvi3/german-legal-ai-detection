@@ -305,6 +305,16 @@ def build_dataset(use_openlegaldata: bool = False, use_rii: bool = False, use_fo
     ai_records = extract_ai_texts()
     logger.info(f"Total AI responses: {len(ai_records)}")
 
+    n_ai = len(ai_records)
+    n_human = len(human_records)
+    if n_ai > 0 and n_human > n_ai:
+        logger.info(f"Downsampling human records from {n_human} to {n_ai} (1:1 ratio)")
+        random.seed(RANDOM_SEED)
+        human_records = random.sample(human_records, n_ai)
+        logger.info(f"Human records after downsampling: {len(human_records)}")
+    elif n_ai > 0:
+        logger.info(f"Human records ({n_human}) already <= AI records ({n_ai}), no downsampling")
+
     all_records = human_records + ai_records
     logger.info(f"Total records before dedup: {len(all_records)}")
 

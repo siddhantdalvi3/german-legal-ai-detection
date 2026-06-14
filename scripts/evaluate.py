@@ -82,6 +82,7 @@ def evaluate_oneclass(pipeline, texts, labels, texts_cal=None, labels_cal=None,
     logger.info(f"  Default-threshold Precision (AI): {tp/(tp+fp):.4f}" if (tp+fp) > 0 else "  Default-threshold Precision: N/A")
     logger.info(f"  Default-threshold FPR:            {fp/(fp+tn):.4f}" if (fp+tn) > 0 else "  Default-threshold FPR: N/A")
 
+    mlflow.end_run()
     with mlflow.start_run(run_id=run_id) if run_id else mlflow.start_run():
         mlflow.log_metrics({f"test_{k}": v for k, v in results.items()})
 
@@ -117,6 +118,7 @@ def evaluate_baseline(pipeline, texts, labels, texts_cal=None, labels_cal=None,
     logger.info(f"\nBaseline {experiment_name} — Test Results:")
     _print_results(results)
 
+    mlflow.end_run()
     with mlflow.start_run(run_id=run_id) if run_id else mlflow.start_run():
         mlflow.log_metrics({f"test_{k}": v for k, v in results.items()})
         report = classification_report(

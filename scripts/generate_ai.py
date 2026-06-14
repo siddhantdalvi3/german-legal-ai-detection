@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -165,7 +166,11 @@ def load_checkpoint(path: Path) -> int:
     return count
 
 
-def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | None = None):
+def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | None = None, device: int | None = None, count: int | None = None):
+    if device is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
+        logger.info(f"Pinned to GPU {device} (CUDA_VISIBLE_DEVICES={device})")
+
     AI_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     if models is None:
@@ -214,18 +219,22 @@ def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | Non
 
     topics = load_topics()
     total_sentences = 0
-    target = SENTENCES_PER_COMBINATION
+    target = count if count is not None else SENTENCES_PER_COMBINATION
+    if count is not None:
+        logger.info(f"Overriding target count: {target} per combination")
 
     for model in models:
         # Determine concurrency based on model size
         if model.startswith("mlx:"):
             concurrency = 1  # MLX models are loaded per-process; avoid OOM
-        elif any(m in model for m in ("gemma4", "qwen3:14b", "mlx_vlm")):
-            concurrency = 2
-        elif "gemma3:12b" in model:
-            concurrency = 3
+        elif "deepseek-r1:70b" in model:
+            concurrency = 1  # 70B: ~43GB, fill one H100
+        elif any(m in model for m in ("steuerllm", "gemma3:27b", "qwen3:30b", "mistral-small:24b")):
+            concurrency = 2  # 24-30B: ~14-20GB, 2 per H100
+        elif any(m in model for m in ("gemma4", "phi4", "mlx_vlm")):
+            concurrency = 3  # 12-14B: ~8-10GB, 3-4 per H100
         else:
-            concurrency = 4  # small models: qwen2.5:7b, mistral
+            concurrency = 4  # small models: qwen2.5:7b, mistral:7b
 
         for temp in active_temps:
             model_key = model.replace("/", "_").replace(":", "_")
@@ -297,4 +306,11 @@ def generate_ai_corpus(models: list[str] | None = None, temps: list[float] | Non
 
 
 if __name__ == "__main__":
-    generate_ai_corpus()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--models", nargs="*", default=None)
+    parser.add_argument("--temps", nargs="*", type=float, default=None)
+    parser.add_argument("--device", type=int, default=None)
+    parser.add_argument("--count", type=int, default=None)
+    args = parser.parse_args()
+    generate_ai_corpus(models=args.models, temps=args.temps, device=args.device, count=args.count)

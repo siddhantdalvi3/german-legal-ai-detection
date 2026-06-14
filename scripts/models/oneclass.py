@@ -72,7 +72,7 @@ def train_oneclass_svm(texts_train, texts_val, y_val,
         pipeline.fit(texts_train)
 
         _log_oneclass_metrics(pipeline, texts_val, y_val, "val")
-        mlflow.sklearn.log_model(pipeline, "model")
+        mlflow.sklearn.log_model(pipeline, "model", pip_requirements=[])
 
         return pipeline, run.info.run_id
 
@@ -97,6 +97,6 @@ def train_isolation_forest(texts_train, texts_val, y_val,
         pipeline.fit(texts_train)
 
         _log_oneclass_metrics(pipeline, texts_val, y_val, "val")
-        mlflow.sklearn.log_model(pipeline, "model")
+        mlflow.sklearn.log_model(pipeline, "model", pip_requirements=[])
 
         return pipeline, run.info.run_id
