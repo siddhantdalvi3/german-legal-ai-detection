@@ -65,6 +65,9 @@ wait
 echo "All models pulled."
 
 echo "=== Step 5: Run generation ==="
+# Increase Ollama parallel processing for throughput
+export OLLAMA_NUM_PARALLEL=3
+
 if [ "$HAS_DEEPSEEK" = true ] && [ ${#MODELS[@]} -gt 1 ]; then
     # Dual GPU: deepseek on GPU0, rest on GPU1
     GPU0_MODELS=()

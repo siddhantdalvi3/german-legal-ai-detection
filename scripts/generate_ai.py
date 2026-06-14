@@ -115,6 +115,7 @@ def ollama_generate(model: str, prompt: str, temperature: float) -> str:
         "prompt": prompt,
         "temperature": temperature,
         "num_predict": 256,
+        "num_ctx": 2048,
         "keep_alive": "5m",
         "stream": False,
     }
