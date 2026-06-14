@@ -60,8 +60,12 @@ HF_MODEL_KEYS = {
     "gemma4": "google/gemma-4-12b-it",
     "phi4": "microsoft/phi-4",
     "deepseek": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
-    "qwen2.5": "Qwen/Qwen2.5-7B-Instruct",
+    "qwen2.5": "Qwen/Qwen2.5-14B-Instruct",
     "mistral": "mistralai/Mistral-Small-Instruct-24B-Base-2501",
+}
+
+QUANTIZATION_OVERRIDE = {
+    "deepseek": "fp8",
 }
 
 
@@ -89,12 +93,15 @@ def main():
         hf_name = HF_MODEL_KEYS[model_key]
         logger.info(f"Loading {model_key} ({hf_name})...")
         t0 = time.time()
-        llm = LLM(
+        kwargs = dict(
             model=hf_name,
             gpu_memory_utilization=0.9,
             max_model_len=2048,
             trust_remote_code=True,
         )
+        if model_key in QUANTIZATION_OVERRIDE:
+            kwargs["quantization"] = QUANTIZATION_OVERRIDE[model_key]
+        llm = LLM(**kwargs)
         logger.info(f"Model loaded in {time.time()-t0:.1f}s")
 
         for temp in args.temps:
