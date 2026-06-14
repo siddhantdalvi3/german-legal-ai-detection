@@ -41,9 +41,12 @@ AVAILABLE_MODELS = {
     "qwen3": {"type": "ollama", "name": "qwen3:30b", "desc": "Qwen 3 30B (MoE)"},
     "gemma3": {"type": "ollama", "name": "gemma3:27b", "desc": "Gemma 3 27B"},
     "gemma4": {"type": "ollama", "name": "gemma4:12b", "desc": "Gemma 4 12B"},
+    "gemma4-ctx": {"type": "ollama", "name": "gemma4-ctx", "desc": "Gemma 4 12B (ctx=2048)"},
     "mistral": {"type": "ollama", "name": "mistral-small:24b", "desc": "Mistral Small 24B"},
     "deepseek": {"type": "ollama", "name": "deepseek-r1:70b", "desc": "DeepSeek R1 70B"},
+    "deepseek-ctx": {"type": "ollama", "name": "deepseek-ctx", "desc": "DeepSeek R1 70B (ctx=2048)"},
     "phi4": {"type": "ollama", "name": "phi4:14b", "desc": "Phi-4 14B"},
+    "phi4-ctx": {"type": "ollama", "name": "phi4-ctx", "desc": "Phi-4 14B (ctx=2048)"},
     "steuerllm": {
         "type": "ollama",
         "name": "steuerllm:28b",
